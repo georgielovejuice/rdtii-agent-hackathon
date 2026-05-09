@@ -1,0 +1,44 @@
+{
+  "run_id": "thailand_20260509_192538_8b5f05",
+  "country": "thailand",
+  "generated_at": "2026-05-09T12:25:39.002156+00:00",
+  "total_uncertain": 4,
+  "items": [
+    {
+      "indicator_id": "6.2",
+      "indicator_name": "Local storage requirements",
+      "pillar": 6,
+      "reason": "LLM could not find supporting evidence in this article.",
+      "source_url": "https://www.oag.go.th/wp-content/uploads/2021/11/Personal-Data-Protection-Act-BE-2562-2019.pdf",
+      "article_ref": "Section 28.",
+      "verbatim_quote": ""
+    },
+    {
+      "indicator_id": "6.3",
+      "indicator_name": "Infrastructure requirements",
+      "pillar": 6,
+      "reason": "LLM could not find supporting evidence in this article.",
+      "source_url": "https://www.oag.go.th/wp-content/uploads/2021/11/Personal-Data-Protection-Act-BE-2562-2019.pdf",
+      "article_ref": "Section 28.",
+      "verbatim_quote": ""
+    },
+    {
+      "indicator_id": "6.5",
+      "indicator_name": "Not in an agreement with binding commitments on data transfer",
+      "pillar": 6,
+      "reason": "LLM could not find supporting evidence in this article.",
+      "source_url": "https://www.oag.go.th/wp-content/uploads/2021/11/Personal-Data-Protection-Act-BE-2562-2019.pdf",
+      "article_ref": "Section 28.",
+      "verbatim_quote": ""
+    },
+    {
+      "indicator_id": "7.2",
+      "indicator_name": "Minimum period of data retention requirements",
+      "pillar": 7,
+      "reason": "LLM could not find supporting evidence in this article.",
+      "source_url": "https://www.oag.go.th/wp-content/uploads/2021/11/Personal-Data-Protection-Act-BE-2562-2019.pdf",
+      "article_ref": "Section 28.",
+      "verbatim_quote": ""
+    }
+  ]
+}

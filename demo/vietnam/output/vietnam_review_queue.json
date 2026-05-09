@@ -1,0 +1,53 @@
+{
+  "run_id": "vietnam_20260509_192541_244587",
+  "country": "vietnam",
+  "generated_at": "2026-05-09T12:25:41.945157+00:00",
+  "total_uncertain": 5,
+  "items": [
+    {
+      "indicator_id": "6.3",
+      "indicator_name": "Infrastructure requirements",
+      "pillar": 6,
+      "reason": "LLM could not find supporting evidence in this article.",
+      "source_url": "https://vanban.chinhphu.vn/cybersecurity-law-24-2018-qh14",
+      "article_ref": "Article 26.",
+      "verbatim_quote": ""
+    },
+    {
+      "indicator_id": "6.5",
+      "indicator_name": "Not in an agreement with binding commitments on data transfer",
+      "pillar": 6,
+      "reason": "LLM could not find supporting evidence in this article.",
+      "source_url": "https://vanban.chinhphu.vn/cybersecurity-law-24-2018-qh14",
+      "article_ref": "Article 26.",
+      "verbatim_quote": ""
+    },
+    {
+      "indicator_id": "7.2",
+      "indicator_name": "Minimum period of data retention requirements",
+      "pillar": 7,
+      "reason": "LLM could not find supporting evidence in this article.",
+      "source_url": "https://vanban.chinhphu.vn/cybersecurity-law-24-2018-qh14",
+      "article_ref": "Article 9.",
+      "verbatim_quote": ""
+    },
+    {
+      "indicator_id": "7.3",
+      "indicator_name": "Data Impact Assessment or Data Protection Officer requirements",
+      "pillar": 7,
+      "reason": "LLM could not find supporting evidence in this article.",
+      "source_url": "https://vanban.chinhphu.vn/cybersecurity-law-24-2018-qh14",
+      "article_ref": "Article 26.",
+      "verbatim_quote": ""
+    },
+    {
+      "indicator_id": "7.4",
+      "indicator_name": "Requirements to allow Government access to personal data",
+      "pillar": 7,
+      "reason": "LLM could not find supporting evidence in this article.",
+      "source_url": "https://vanban.chinhphu.vn/cybersecurity-law-24-2018-qh14",
+      "article_ref": "Article 26.",
+      "verbatim_quote": ""
+    }
+  ]
+}

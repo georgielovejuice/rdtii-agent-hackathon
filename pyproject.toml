@@ -1,0 +1,10 @@
+[project]
+name = "rdtii-agent"
+version = "0.1.0"
+description = "Open-source AI pipeline for RDTII regulatory analysis (Pillars 6 & 7)"
+license = {text = "MIT"}
+requires-python = ">=3.11"
+readme = "README.md"
+
+[project.scripts]
+rdtii-agent = "main:main_cli"

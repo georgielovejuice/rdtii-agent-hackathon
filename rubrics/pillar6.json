@@ -1,0 +1,68 @@
+{
+  "pillar": 6,
+  "name": "Cross-border Data Policies",
+  "description": "Policies that affect the ability to transfer data across borders, including restrictions, localization requirements, and international agreements.",
+  "scoring_note": "Score 0 = low compliance cost (open). Score 1 = high compliance cost (restrictive). Score > 0 when: differential treatment of foreign providers, additional compliance costs online vs offline, or absence of key international norms.",
+  "indicators": [
+    {
+      "id": "6.1",
+      "name": "Ban & local processing requirements",
+      "description": "Outright bans on cross-border data transfers or requirements that data must be processed domestically.",
+      "scoring_guide": {
+        "0.0": "No ban or local processing requirement exists.",
+        "0.5": "Partial or conditional ban — transfers allowed under specific conditions or with authorization.",
+        "1.0": "Full ban on cross-border transfers or mandatory local processing with no exception pathway."
+      },
+      "keywords": ["ban", "prohibit", "shall not transfer", "must be processed", "locally processed", "domestic processing"],
+      "related_articles_examples": ["Vietnam Cybersecurity Law Art. 26", "Russia Federal Law 149-FZ"]
+    },
+    {
+      "id": "6.2",
+      "name": "Local storage requirements",
+      "description": "Requirements to store a copy of data on servers physically located within the country.",
+      "scoring_guide": {
+        "0.0": "No local storage requirement.",
+        "0.5": "Mirroring requirement — data may be transferred but a local copy must be retained.",
+        "1.0": "Strict local storage — all primary storage must be within national territory."
+      },
+      "keywords": ["store", "storage", "server", "located in", "within the territory", "data centre", "local copy", "mirror"],
+      "related_articles_examples": ["Vietnam Cybersecurity Law Art. 26(3)", "China Cybersecurity Law Art. 37"]
+    },
+    {
+      "id": "6.3",
+      "name": "Infrastructure requirements",
+      "description": "Requirements to maintain physical IT infrastructure (servers, data centres) within the country as a condition of operation.",
+      "scoring_guide": {
+        "0.0": "No infrastructure requirement.",
+        "0.5": "Infrastructure requirement applies only to certain sectors or data types.",
+        "1.0": "Broad infrastructure requirement applies to all digital service providers."
+      },
+      "keywords": ["infrastructure", "data centre", "server within", "physical presence", "local infrastructure", "establish"],
+      "related_articles_examples": []
+    },
+    {
+      "id": "6.4",
+      "name": "Conditional flow regimes",
+      "description": "Transfer is permitted but subject to conditions such as adequacy decisions, standard contractual clauses, consent, or government approval.",
+      "scoring_guide": {
+        "0.0": "Transfers are free with no conditions.",
+        "0.5": "Transfers permitted under standard mechanisms (consent, contracts, adequacy) — moderate compliance cost.",
+        "1.0": "Transfers require case-by-case government approval — high compliance cost."
+      },
+      "keywords": ["consent", "approval", "adequacy", "standard contractual", "authorization", "comparable protection", "except in accordance"],
+      "related_articles_examples": ["Thailand PDPA Section 28", "Singapore PDPA Section 26"]
+    },
+    {
+      "id": "6.5",
+      "name": "Not in an agreement with binding commitments on data transfer",
+      "description": "Absence of participation in international agreements that provide binding commitments on cross-border data flows (e.g. CPTPP, DEPA, APEC CBPR).",
+      "scoring_guide": {
+        "0.0": "Country is party to one or more binding international data flow agreements.",
+        "0.5": "Country has non-binding commitments or is in negotiation.",
+        "1.0": "Country has no international binding commitments on data transfers."
+      },
+      "keywords": ["CPTPP", "DEPA", "CBPR", "APEC", "bilateral", "agreement", "binding", "treaty", "data flows"],
+      "related_articles_examples": []
+    }
+  ]
+}

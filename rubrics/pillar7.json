@@ -1,0 +1,56 @@
+{
+  "pillar": 7,
+  "name": "Domestic Data Protection & Privacy",
+  "description": "Domestic regulations governing the collection, use, storage, and processing of personal data within the country, including cybersecurity obligations.",
+  "scoring_note": "Score 0 = low compliance cost (open/adequate framework). Score 1 = high compliance cost (heavy obligations or absence of key protections). Absence of key legal framework also scores > 0.",
+  "indicators": [
+    {
+      "id": "7.1",
+      "name": "Lack of comprehensive legal framework for data protection",
+      "description": "Absence of a comprehensive, dedicated personal data protection law. Inverse indicator — a strong law = lower score.",
+      "scoring_guide": {
+        "0.0": "Country has a comprehensive, dedicated data protection law covering all sectors.",
+        "0.5": "Country has partial or sector-specific data protection rules but no unified law.",
+        "1.0": "No dedicated data protection legislation exists."
+      },
+      "keywords": ["personal data protection", "data protection act", "privacy law", "PDPA", "data privacy", "personal information protection"],
+      "related_articles_examples": ["Thailand PDPA BE 2562 (2019)", "Singapore PDPA 2012", "Vietnam Decree 13/2023"]
+    },
+    {
+      "id": "7.2",
+      "name": "Minimum period of data retention requirements",
+      "description": "Mandatory minimum periods for which data must be retained, adding compliance cost for businesses.",
+      "scoring_guide": {
+        "0.0": "No mandatory minimum retention period — businesses decide retention based on purpose.",
+        "0.5": "Minimum retention period required for specific sectors (e.g. financial, telecoms) only.",
+        "1.0": "Broad mandatory minimum retention period applies across sectors."
+      },
+      "keywords": ["retention", "retain", "keep", "store for", "minimum period", "years", "months", "archiv"],
+      "related_articles_examples": []
+    },
+    {
+      "id": "7.3",
+      "name": "Data Impact Assessment or Data Protection Officer requirements",
+      "description": "Mandatory DPIA or DPO requirements impose compliance obligations on businesses handling personal data.",
+      "scoring_guide": {
+        "0.0": "No DPIA or DPO requirement.",
+        "0.5": "DPIA or DPO required only for high-risk processing or large-scale controllers.",
+        "1.0": "DPIA and DPO both mandatory for broad categories of data controllers."
+      },
+      "keywords": ["data protection officer", "DPO", "impact assessment", "DPIA", "privacy impact", "appointed", "designate"],
+      "related_articles_examples": ["Thailand PDPA Section 41 (DPO)", "GDPR Art. 37-39"]
+    },
+    {
+      "id": "7.4",
+      "name": "Requirements to allow Government access to personal data",
+      "description": "Obligations on private entities to provide government agencies with access to personal data, beyond standard law enforcement processes.",
+      "scoring_guide": {
+        "0.0": "Government access only through standard judicial/legal process with oversight.",
+        "0.5": "Government access permitted for national security or public interest with some procedural safeguards.",
+        "1.0": "Broad government access rights with minimal procedural safeguards or oversight."
+      },
+      "keywords": ["government access", "authority", "competent authority", "national security", "disclose", "provide to", "law enforcement", "state access"],
+      "related_articles_examples": ["Vietnam Cybersecurity Law Art. 26", "China Cybersecurity Law Art. 28"]
+    }
+  ]
+}

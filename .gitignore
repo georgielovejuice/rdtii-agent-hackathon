@@ -1,0 +1,28 @@
+# Python
+__pycache__/
+*.py[cod]
+*.egg-info/
+.venv/
+venv/
+dist/
+build/
+
+# Environment
+.env
+
+# Outputs (generated — don't commit)
+outputs/
+demo/*/extracted/
+
+# Models (large files)
+*.bin
+*.safetensors
+models/
+
+# OS
+.DS_Store
+Thumbs.db
+
+# IDE
+.vscode/
+.idea/
