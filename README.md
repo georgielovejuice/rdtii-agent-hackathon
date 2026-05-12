@@ -46,6 +46,9 @@ If Ollama is unavailable, the pipeline falls back to the bundled heuristic class
 python main.py --country thailand --pillars 6 7
 ```
 
+For the full repository workflow, including source collection, testing,
+evidence review, UI usage, and checkpoint rules, see `WORKFLOW.md`.
+
 ### Browser UI
 
 ```bash

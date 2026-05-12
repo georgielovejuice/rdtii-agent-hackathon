@@ -165,6 +165,26 @@ make test
 
 Files changed:
 
+- `WORKFLOW.md`
+- `README.md`
+- `AGENTS.md`
+
+What changed:
+
+- Added a repository workflow covering environment setup, official PDF/source
+  collection, `file://` ingestion, pipeline runs, evidence review, testing, UI
+  usage, development rules, and agent checkpoint rules.
+- Linked the workflow from the README quick start section.
+- Updated this required agent change log.
+
+Verification:
+
+- Not run. Documentation-only change.
+
+### 2026-05-12
+
+Files changed:
+
 - `pipeline/extract.py`
 - `pipeline/reason.py`
 - `tests/test_pipeline.py`
