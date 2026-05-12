@@ -26,6 +26,7 @@
 - **Score:** `{{ "%.1f" | format(s.score) }}`
 - **Confidence:** {{ s.confidence }}
 - **Source:** {{ s.source_title }} (Tier {{ s.source_tier }})
+- **Extraction Method:** {{ s.extraction_method or "Not recorded" }}
 - **Article:** {{ s.article_ref }}
 - **Effective Date:** {{ s.effective_date or "Not specified" }}
 - **Source URL:** {{ s.source_url }}
@@ -50,6 +51,7 @@ A qualified regulatory analyst should review these items before publication.
 - **Reason:** {{ s.human_review_reason }}
 - **Article checked:** {{ s.article_ref }}
 - **Source:** {{ s.source_title }}
+- **Extraction Method:** {{ s.extraction_method or "Not recorded" }}
 
 ---
 {% endfor %}

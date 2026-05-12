@@ -186,6 +186,7 @@ def _find_source_meta(article_id: str, docs: list) -> dict:
                 "url": doc.source_url,
                 "title": doc.title,
                 "tier": doc.tier,
+                "extraction_method": doc.extraction_method,
                 "effective_date": doc.effective_date,
                 "sha256": doc.sha256,
             }

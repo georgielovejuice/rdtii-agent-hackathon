@@ -12,9 +12,29 @@
 
 ---
 
-## Current Status
+## Current Status (as of 10 May 2026)
 
-Ollama is the primary LLM backend (`LLM_BACKEND=ollama`) with `qwen2.5:3b` as the default local model for 4GB VRAM machines. OpenAI and Anthropic remain supported as optional cloud backends, and the local heuristic classifier remains the automatic fallback whenever the selected LLM backend is unavailable.
+### What is working
+- Pipeline runs end-to-end for Thailand, Vietnam, Singapore (offline mode)
+- Ollama backend wired — LLM_BACKEND=ollama, default model configurable
+- Remote GPU setup via Tailscale (friend's RTX 5070 12GB)
+- "No Quote, No Score" rule enforced in both LLM and heuristic modes
+- 3-tier source authority system with conflict detection
+- SQLite audit trail, JSON-LD output, human review queue, country brief
+- 9 pytest tests passing
+
+### Current bottlenecks (in priority order)
+1. Real PDF not loading — pipeline falls back to 6-section bundled text instead of 178-section real PDPA
+2. Keyword pre-filter not yet added — LLM called ~150 times per run (slow)
+3. ChromaDB not installed — semantic retrieval falls back to keyword overlap
+4. No Streamlit UI — judges see terminal output only
+5. NLI CrossEncoder pre-ranker not yet added
+
+### LLM Backend
+- Primary: Ollama on friend's RTX 5070 12GB via Tailscale
+- Default model: phi3.5:3.8b (fast, reliable)
+- Upgrade model: qwen2.5:7b (better legal reasoning, ~6GB VRAM)
+- Fallback: Local heuristic classifier (no GPU needed, all rules still apply)
 
 ---
 
@@ -29,6 +49,7 @@ Ollama is the primary LLM backend (`LLM_BACKEND=ollama`) with `qwen2.5:3b` as th
 | General RAG pipeline | RDTII-specific scoring logic hardcoded as structured JSON rubric |
 | Hallucination risk | "No Quote, No Score" rule + HalluGraph-style span verifier |
 | No source hierarchy | 3-tier authority system: law > amendment > guideline |
+| Citation-free scores | Verbatim quote + URL + article ref + SHA256 + date on every score |
 
 ---
 
@@ -43,6 +64,7 @@ INPUT: Country Name + Pillar Scope (6 and/or 7)
 │  - Scrapy + Playwright (JS-heavy gov sites)  │
 │  - Source authority ranker (gov.XX = Tier 1) │
 │  - Language detector (langdetect + fasttext) │
+│  - file:// URL support for local PDFs        │
 └────────────────────┬─────────────────────────┘
                      │
                      ▼
@@ -53,6 +75,7 @@ INPUT: Country Name + Pillar Scope (6 and/or 7)
 │  - Tesseract        → scanned PDFs (fallback)│
 │  - Playwright + BS4 → HTML pages             │
 │  - Structure parser → article/section/clause │
+│  - Bundled demo text → offline fallback      │
 └────────────────────┬─────────────────────────┘
                      │
                      ▼
@@ -69,8 +92,8 @@ INPUT: Country Name + Pillar Scope (6 and/or 7)
 ┌──────────────────────────────────────────────┐
 │  STAGE 4: HYBRID RAG + KNOWLEDGE GRAPH  ★    │
 │  - ChromaDB (local) → semantic retrieval     │
+│  - NLI CrossEncoder → pre-ranker fallback    │
 │  - NetworkX KG      → cross-ref tracking     │
-│    ("as defined in Section X" links)         │
 │  - Span verifier    → claim ↔ source match   │
 │    (HalluGraph-style: Entity Grounding +     │
 │     Relation Preservation check)             │
@@ -79,8 +102,9 @@ INPUT: Country Name + Pillar Scope (6 and/or 7)
                      ▼
 ┌──────────────────────────────────────────────┐
 │  STAGE 5: LEGAL REASONING CHAIN  ★           │
+│  - Keyword pre-filter (skip irrelevant)      │
 │  - RDTII rubric loader (Pillar 6+7 JSON)     │
-│  - Constrained LLM (Ollama local primary)    │
+│  - Constrained LLM via Ollama (remote GPU)   │
 │    → classify only, never freestyle          │
 │  - Conflict resolver (Tier 1 wins)           │
 │  - Confidence: HIGH / MEDIUM / UNCERTAIN     │
@@ -94,6 +118,7 @@ INPUT: Country Name + Pillar Scope (6 and/or 7)
 │  - Country brief (Jinja2 → Markdown/PDF)     │
 │  - SQLite audit trail (every decision logged)│
 │  - Human review queue (uncertain items)      │
+│  - Streamlit web UI (demo day interface)     │
 └──────────────────────────────────────────────┘
 
 RULE: No quote → No score. No source → No output.
@@ -112,7 +137,7 @@ We ask: *"Given RDTII Pillar 6, Indicator: Ban & local processing requirements, 
 ### What the LLM IS allowed to do
 - Classify a provision against a specific RDTII indicator
 - Extract the exact verbatim phrase that supports its classification
-- Identify linguistic ambiguity between provisions (e.g. absolute prohibition vs conditional exception)
+- Identify linguistic ambiguity between provisions
 - Flag conflicts between sources for human review
 - Return UNCERTAIN when evidence is insufficient
 
@@ -143,47 +168,31 @@ TIER 3 — Reference only (NEVER used for scoring)
   Unofficial paraphrases or summaries
 ```
 
-**Rule:** Tier 1 vs Tier 2 conflict → score from Tier 1, flag conflict for human review.
-**Rule:** Tier 3 sources are used ONLY to locate relevant provisions in Tier 1/2, never to score.
-**Rule:** If no Tier 1 or Tier 2 source found → indicator scored as UNCERTAIN, human review required.
-
 ---
 
 ## Anti-Hallucination Design
 
 ### The "No Quote, No Score" Rule
-Every RDTII indicator score must be accompanied by ALL of:
+Every RDTII indicator score must include ALL of:
 - Exact verbatim quoted text (not paraphrased)
 - Source name + authority tier
 - Article / Section / Page reference
-- URL or document SHA256 hash (for reproducibility)
+- URL or document SHA256 hash
 - Date of the source document
 
-If any of these are missing → score is rejected, item added to human review queue, never published.
+If any of these are missing → score rejected → human review queue.
 
 ### Span-Level Verification (HalluGraph-inspired)
 After LLM produces a classification + quote:
-1. Extract entities from the quote (law names, article numbers, dates, obligations)
-2. Check each entity exists verbatim in the source document (Entity Grounding check)
-3. Check the relationship asserted is supported by the source (Relation Preservation check)
-4. If either check fails → flag as UNCERTAIN, route to human queue
+1. Extract entities from the quote (law names, article numbers, dates)
+2. Check each entity exists verbatim in source (Entity Grounding check)
+3. Check relationship asserted is supported by source (Relation Preservation check)
+4. If either fails → UNCERTAIN → human queue
 
-### Failure Cases We Catch
+### Key Failure Cases We Catch
+**The Paraphrase Trap:** Tier 3 guideline says "data must stay local." Tier 1 law says "transfers require authorization." System scores only from Tier 1, logs Tier 3 as "located but not used."
 
-**The Paraphrase Trap:** A ministry guideline (Tier 3) says "data must be kept within the country."
-Official law (Tier 1) says "data transfers abroad require authorization." A naive LLM might merge
-both into one localization score. Our system:
-1. Identifies both sources and assigns tiers
-2. Scores from Tier 1 only
-3. Flags Tier 3 paraphrase in audit trail as "located but not used for scoring"
-4. Outputs only the Tier 1 citation with verbatim quote
-
-**The Linguistic Conflict Trap:** A law says "shall not transfer" (absolute prohibition) followed
-by "except in accordance with requirements" (conditional permission). Our system:
-1. Identifies the primary clause (prohibition) and the exception clause separately
-2. Scores the primary clause as the default regulatory position
-3. Scores the exception clause as a modifier with its own conditions
-4. If exception conditions are vague → flags UNCERTAIN on the modifier, not the whole indicator
+**The Linguistic Conflict Trap:** "Shall not transfer" (primary rule) vs "except in accordance with requirements" (exception clause). System scores each separately. Never blends them into one synthesized score.
 
 ---
 
@@ -194,17 +203,18 @@ by "except in accordance with requirements" (conditional permission). Our system
 |---|---|---|
 | Language | Python 3.11+ | Ecosystem depth, UN-friendly |
 | Orchestration | Custom pipeline | No LangChain — too opaque for UN auditors |
-| LLM (primary) | Ollama — local, free, no API key (`LLM_BACKEND=ollama`); default model: `qwen2.5:3b`; also supports `llama3.2:3b`, `qwen2.5:7b`, `mistral:7b` | No quota limits, fully local execution, deterministic legal scoring on 4GB VRAM |
-| LLM (cloud A) | OpenAI `gpt-4o` (`LLM_BACKEND=openai`, `OPENAI_API_KEY`) | Optional cloud backend |
-| LLM (cloud B) | Anthropic Claude Sonnet 4 (`LLM_BACKEND=anthropic`, `ANTHROPIC_API_KEY`) | Optional cloud backend |
-| LLM (offline) | Local heuristic classifier (automatic fallback, no config) | Fully air-gapped mode option |
+| LLM (primary) | Ollama on remote RTX 5070 via Tailscale | Free, no quota, best quality model available |
+| LLM default model | phi3.5:3.8b | Fast, reliable, ~3GB VRAM |
+| LLM upgrade model | qwen2.5:7b | Better legal reasoning, ~6GB VRAM |
+| LLM (offline fallback) | Local heuristic classifier | Fully air-gapped, all rules still apply |
 | License | MIT open-source | Required by hackathon |
 
 ### Document Extraction
 | Component | Tool | Reason |
 |---|---|---|
-| Digital PDF | Docling (IBM Research) | 97.9% table accuracy, preserves legal structure, local execution |
-| Scanned PDF (primary) | Surya OCR | 90+ languages, open-source, multilingual layout analysis |
+| Digital PDF | Docling (IBM Research) | 97.9% table accuracy, preserves legal structure |
+| Local PDF | file:// URL handler | Reads downloaded PDFs directly from disk |
+| Scanned PDF (primary) | Surya OCR | 90+ languages, open-source |
 | Scanned PDF (fallback) | Tesseract | Battle-tested, all 6 UN languages |
 | HTML pages | Playwright + BeautifulSoup | Handles JS-heavy gov sites |
 | Structure parser | Custom Python (regex + heuristics) | Article/section/clause boundary detection |
@@ -213,6 +223,7 @@ by "except in accordance with requirements" (conditional permission). Our system
 | Component | Tool | Reason |
 |---|---|---|
 | Web crawler | Scrapy + Playwright | JS-heavy government websites |
+| Local file support | file:// URL scheme | Bypasses blocked government domains |
 | Source authority ranker | Custom rule-based | gov.XX TLD = Tier 1, pattern matching |
 | Language detector | langdetect + fasttext | Fast, offline, 170+ languages |
 
@@ -221,15 +232,10 @@ by "except in accordance with requirements" (conditional permission). Our system
 |---|---|---|
 | Vector store | ChromaDB (local) | Open-source, no external API, semantic retrieval |
 | Embeddings | sentence-transformers/paraphrase-multilingual | Multilingual, runs locally |
+| Pre-ranker fallback | NLI CrossEncoder (nli-distilroberta-base) | Semantic pre-filter when ChromaDB unavailable |
 | Knowledge graph | NetworkX | Lightweight, tracks cross-article references |
 | Span verifier | Custom NLI (entity + relation check) | HalluGraph-inspired hallucination detection |
-
-### Multilingual Support
-| Component | Tool | Reason |
-|---|---|---|
-| Translation | Helsinki-NLP/opus-mt | Open-source, runs locally, no API cost |
-| Target languages | Thai, Vietnamese, Russian, Chinese, English | Asia-Pacific focus |
-| OCR multilingual | Surya OCR | Arabic, Chinese, Russian, Thai, 90+ total |
+| Keyword pre-filter | Custom Python | Skips irrelevant article+indicator pairs before LLM |
 
 ### Output
 | Component | Tool | Reason |
@@ -238,154 +244,102 @@ by "except in accordance with requirements" (conditional permission). Our system
 | Country brief | Jinja2 → Markdown → PDF | ESCAP report format |
 | Audit trail | SQLite | Every decision logged, reproducible |
 | Human review queue | JSON flagged list | Uncertain items for expert verification |
+| Web UI | Streamlit | Demo day — judges interact via browser |
 
 ---
 
-## RDTII Pillar 6 & 7 — Exact Indicators (from RDTII 2.0 Guide)
+## RDTII Pillar 6 & 7 — Exact Indicators (RDTII 2.0 Guide)
 
 ### Pillar 6 — Cross-border Data Policies
-- Ban & local processing requirements
-- Local storage requirements
-- Infrastructure requirements
-- Conditional flow regimes
-- Not in an agreement with binding commitments on data transfer
+- 6.1 Ban & local processing requirements
+- 6.2 Local storage requirements
+- 6.3 Infrastructure requirements
+- 6.4 Conditional flow regimes
+- 6.5 Not in an agreement with binding commitments on data transfer
 
 ### Pillar 7 — Domestic Data Protection & Privacy
-- Lack of comprehensive legal framework for data protection
-- Minimum period of data retention requirements
-- Data Impact Assessment or Data Protection Officer requirements
-- Requirements to allow Government access to personal data
+- 7.1 Lack of comprehensive legal framework for data protection
+- 7.2 Minimum period of data retention requirements
+- 7.3 Data Impact Assessment or Data Protection Officer requirements
+- 7.4 Requirements to allow Government access to personal data
 
 **Scoring scale:** 0 (low compliance cost / open) → 1 (high compliance cost / restrictive)
-**Score > 0 triggers when:** differential treatment of foreign providers, additional compliance
-costs for online services, or absence of key international norms.
 
 ---
 
-## Demo Countries (Submission)
+## Demo Countries
 
-| Country | Pillar 6 Key Law | Pillar 7 Key Law | Doc Types | Languages |
+| Country | Pillar 6 Key Law | Pillar 7 Key Law | PDF source | Languages |
 |---|---|---|---|---|
-| Thailand | PDPA + ETDA regulations | PDPA (BE 2562) | Digital PDF + HTML | Thai + English |
-| Vietnam | Cybersecurity Law Art. 26 | Decree 13/2023/ND-CP | Digital PDF | Vietnamese + English |
-| Singapore | PDPA 2012 (amended 2020) | PDPA + advisory guidelines | HTML + PDF | English |
+| Thailand | PDPA + ETDA regulations | PDPA (BE 2562) | Local file (downloaded manually) | Thai + English |
+| Vietnam | Cybersecurity Law Art. 26 | Decree 13/2023/ND-CP | Local file (downloaded manually) | Vietnamese + English |
+| Singapore | PDPA 2012 (amended 2020) | PDPA + advisory guidelines | HTML from agc.gov.sg | English |
 
-**Why these three:** Known regulatory complexity across Pillar 6 + 7, laws available in multiple
-formats and languages, covers a spectrum from open (Singapore) to conditional (Thailand) to
-restrictive (Vietnam) — a good stress test of the full scoring range.
+**Why these three:** Covers full scoring range — open (Singapore) → conditional (Thailand) → restrictive (Vietnam).
 
 ---
 
-## Submission Plan (Before 15 May 2026)
-
-### Now → 9 May: Foundation
-- [ ] Read RDTII 2.0 guide — Chapter 3, Pillar 6 (p.41) and Pillar 7 (p.49)
-- [ ] Manually score Thailand PDPA on all Pillar 6 + 7 indicators (ground truth)
-- [ ] Set up GitHub repo (MIT license, open-source)
-- [ ] Write Q1 answers (linguistic conflict — legal analysis first)
-- [ ] Set up Python project structure (see repo layout below)
-
-### 9 May → 12 May: Build Core Pipeline
-- [ ] Stage 1: Scrapy crawler for gov.th + OAG Thailand PDPA page
-- [ ] Stage 2: Docling extractor for Thailand PDPA PDF
-- [ ] Stage 2: Surya OCR test on a scanned Thai legal doc
-- [ ] Stage 3: Source authority ranker (Tier 1/2/3 classifier)
-- [ ] Stage 4: ChromaDB setup + NetworkX KG for cross-references
-- [ ] Stage 4: Span verifier (entity grounding check)
-- [ ] Stage 5: RDTII rubric JSON (Pillar 6 + 7 hardcoded)
-- [ ] Stage 5: Constrained LLM prompting chain
-- [ ] Stage 6: JSON-LD output + Jinja2 country brief template
-- [ ] Write Q2, Q3, Q4, Q5, Q6 answers
-
-### 12 May → 15 May: Polish + Submit
-- [ ] End-to-end demo run: Thailand → Pillar 6 + 7 full output
-- [ ] Add Vietnam as second demo country
-- [ ] Record 5-minute concept video (see script below)
-- [ ] Write Technical Memo (750 words max)
-- [ ] Final review + submit all form answers
-
----
-
-## Concept Video Script (5 minutes)
+## Remote GPU Setup (Tailscale)
 
 ```
-0:00–0:45  The problem
-           ESCAP pays $2,000/country to manually read laws.
-           100+ countries. 12 pillars. Slow, expensive, gets stale.
+Your computer (runs pipeline)
+      ↓
+Tailscale private network
+      ↓
+Friend's RTX 5070 12GB (runs Ollama)
+      ↓
+phi3.5:3.8b or qwen2.5:7b
+```
 
-0:45–2:00  Our pipeline (show the architecture diagram)
-           Discovery → Extraction → Authority Resolution →
-           Hybrid RAG + KG → Legal Reasoning Chain → Verified Output
+**Your .env:**
+```
+LLM_BACKEND=ollama
+OLLAMA_MODEL=phi3.5:3.8b
+OLLAMA_BASE_URL=http://FRIEND_TAILSCALE_IP:11434/v1
+```
 
-2:00–3:30  Live demo
-           Input: "Thailand, Pillar 6 + 7"
-           Watch: crawler finds PDPA → Docling extracts →
-           Tier ranker assigns authority → KG links cross-refs →
-           Constrained LLM scores "Ban & local processing = 0.5" →
-           Citation: "PDPA Section 28, 2019, oag.go.th/..."
-
-3:30–4:15  Show the output
-           JSON-LD dataset with per-indicator scores + citations
-           Country brief in ESCAP format
-
-4:15–5:00  Why it's trustworthy
-           No quote = no score (show a blocked uncertain item)
-           Human review queue (show flagged items)
-           Fully open-source, runs locally, MIT license
+**Upgrade to better model when ready:**
+```
+OLLAMA_MODEL=qwen2.5:7b
 ```
 
 ---
 
-## Form Question Reference
+## Form Question Reference (Submission Answers)
 
-### Q1 — Linguistic conflict answer approach
-- 1.1: "Shall not transfer" = absolute prohibition. "Except in accordance with requirements" =
-  conditional permission. Conflict: is the default position restriction or openness? The two
-  phrases use contradictory framings in the same provision.
-- 1.2: Phrase 1 is the primary rule; Phrase 2 is its exception. In legal drafting, the exception
-  modifies but does not negate the default. Score from the primary clause (restrictive), note
-  the exception as a modifier with conditions.
-- 1.3: Force the LLM to identify primary clause and exception clause separately. Score the
-  primary clause first. Score the exception conditions separately. Flag vague exception language
-  as UNCERTAIN. Never allow the LLM to blend both phrases into a single score.
+### Q1 — Linguistic conflict
+- 1.1: "Shall not transfer" = absolute prohibition. "Except in accordance with requirements" = conditional permission. Default position is restriction, not openness.
+- 1.2: Phrase 1 is the primary rule; Phrase 2 is its exception. Score from primary clause (restrictive). Note exception as conditional modifier.
+- 1.3: LLM identifies primary clause and exception clause separately. Scores each independently. Vague exception language → UNCERTAIN. Never blends both into one score.
 
 ### Q2 — End-to-end workflow
-collect → Scrapy+Playwright crawl gov sites, rank by Tier
+collect → Scrapy+Playwright crawl / local file:// read
 extract → Docling/Surya/BS4 → clean structured text
-classify → article-level chunking → matched to Pillar 6/7 indicator
+classify → article chunks → keyword pre-filter → NLI re-rank → Pillar 6/7 indicator matching
 explain → constrained LLM with hardcoded RDTII rubric JSON
-cite → verbatim quote + law name + article + URL + date
-export → JSON-LD dataset + Jinja2 country brief + SQLite audit trail
+cite → verbatim quote + law name + article + URL + date + SHA256
+export → JSON-LD dataset + Jinja2 country brief + SQLite audit trail + human review queue
 
 ### Q3 — Data sources
-Thailand (demo): PDPA PDF (digital) from oag.go.th, ETDA HTML pages, Thai + English
-Vietnam (demo): Cybersecurity Law PDF, Decree 13 PDF, Vietnamese + English
-Singapore (demo): PDPA HTML from agc.gov.sg, English only
+Thailand: PDPA PDF (local file), ETDA HTML — Thai + English
+Vietnam: Cybersecurity Law PDF + Decree 13 PDF (local file) — Vietnamese + English
+Singapore: PDPA HTML from agc.gov.sg — English
 
-### Q4 — Anti-hallucination / citation method
-"No Quote, No Score" rule. Every claim must have verbatim text, source name+tier,
-article/section, URL/hash, date. Span verifier checks entity grounding and relation
-preservation. Uncertain items go to human queue, never auto-published.
+### Q4 — Anti-hallucination
+"No Quote, No Score." Verbatim quote → span verifier (entity grounding + relation preservation) → citation record in SQLite. UNCERTAIN → human queue, never auto-published.
 
 ### Q5 — Authority resolution pipeline
-1. Classify source: HTML official page = Tier 1, scanned PDF amendment = Tier 2,
-   ministry guideline = Tier 3
-2. Extract relevant clause from Tier 1 first
-3. Use Tier 2 for amendments/updates, flag version conflicts
-4. Use Tier 3 only to locate provisions in Tier 1/2, never score from it
-5. OCR errors: Docling fallback to Surya, then Tesseract; flag low-confidence OCR
-   chunks for human review
-6. Conflicts: Tier 1 always wins; conflict logged in audit trail with both versions
+1. Classify: HTML official = Tier 1, scanned amendment = Tier 2, guideline = Tier 3
+2. Extract Tier 1 first (Docling/BS4), Tier 2 second (Surya OCR)
+3. Tier 3: locate provisions only, never score
+4. OCR errors: Docling → Surya → Tesseract fallback; low-confidence chunks flagged
+5. Conflict: Tier 1 wins, both versions logged in SQLite audit trail
 
-### Q6 — Hallucination reduction design
-LLM allowed: classify provision against specific indicator, extract verbatim quote,
-flag ambiguity, return UNCERTAIN
-LLM not allowed: score without citation, infer intent, synthesize across sources,
-use Tier 3 for scoring
-Every claim linked to evidence: verbatim quote → span verifier → citation record in SQLite
-Failure case caught: Paraphrase Trap — Tier 3 guideline says "data must stay local,"
-Tier 1 law says "transfers require authorization." System assigns tiers, scores only from
-Tier 1, flags Tier 3 as located-but-unused, outputs only Tier 1 citation.
+### Q6 — Hallucination reduction
+LLM allowed: classify against one specific indicator, extract verbatim quote, flag ambiguity, return UNCERTAIN
+LLM not allowed: score without citation, infer intent, synthesize across sources, use Tier 3
+Every claim: verbatim quote → span verifier → SQLite citation record with URL + article + date + SHA256
+Failure case caught: Paraphrase Trap — Tier 3 says "data must stay local," Tier 1 says "transfers require authorization." System scores Tier 1 only, logs Tier 3 as "located but not used."
 
 ---
 
@@ -394,55 +348,48 @@ Tier 1, flags Tier 3 as located-but-unused, outputs only Tier 1 citation.
 ```
 rdtii-agent/
 ├── CLAUDE.md                        ← this file
+├── CODEX_PROMPTS.md                 ← all Codex build prompts
 ├── README.md
 ├── requirements.txt
+├── .env.example
+├── .gitignore
+├── Makefile
+├── pyproject.toml
+├── main.py                          ← CLI entry point
+├── app.py                           ← Streamlit web UI (add via Prompt 9)
 ├── pipeline/
-│   ├── discover.py                  ← Stage 1: Scrapy + Playwright crawler
-│   ├── extract.py                   ← Stage 2: Docling + Surya + BS4
+│   ├── discover.py                  ← Stage 1: crawler + file:// support
+│   ├── extract.py                   ← Stage 2: Docling + Surya + BS4 + bundled fallback
 │   ├── authority.py                 ← Stage 3: Tier ranker + conflict detector
-│   ├── retrieval.py                 ← Stage 4: ChromaDB + NetworkX KG
-│   ├── verify.py                    ← Stage 4: Span verifier (entity + relation)
-│   ├── reason.py                    ← Stage 5: Constrained LLM reasoning chain
+│   ├── retrieval.py                 ← Stage 4a: ChromaDB + NLI pre-ranker + NetworkX KG
+│   ├── verify.py                    ← Stage 4b: Span verifier
+│   ├── reason.py                    ← Stage 5: Keyword pre-filter + Ollama + heuristic
 │   └── export.py                    ← Stage 6: JSON-LD + Jinja2 + SQLite
 ├── rubrics/
-│   ├── pillar6.json                 ← RDTII Pillar 6 indicators (exact from guide)
-│   └── pillar7.json                 ← RDTII Pillar 7 indicators (exact from guide)
+│   ├── pillar6.json
+│   └── pillar7.json
 ├── templates/
-│   └── country_brief.md.j2          ← Jinja2 country brief template (ESCAP format)
+│   └── country_brief.md.j2
 ├── demo/
-│   ├── thailand/
-│   │   ├── sources.json             ← discovered source URLs + tiers
-│   │   ├── extracted/               ← cleaned legal text per article
-│   │   └── output/                  ← scored JSON-LD + country brief PDF
-│   ├── vietnam/
-│   └── singapore/
+│   ├── thailand/output/             ← real scored outputs
+│   ├── vietnam/output/
+│   └── singapore/output/
 ├── answers/
-│   ├── Q1.md
-│   ├── Q2.md
-│   ├── Q3.md
-│   ├── Q4.md
-│   ├── Q5.md
-│   └── Q6.md
-└── outputs/
-    ├── thailand_pillar6_dataset.json
-    ├── thailand_pillar7_dataset.json
-    ├── thailand_country_brief.pdf
-    └── audit/
-        └── thailand_run_001.sqlite
+│   ├── Q1.md through Q6.md          ← submission form answers
+└── tests/
+    └── test_pipeline.py             ← 9 tests (all passing)
 ```
 
 ---
 
-## Key Principles
-
-> **The system doesn't trust itself.** Every output is a claim that must be proven by a verbatim
-> citation from an authoritative source. The LLM is a classifier, not an oracle. Uncertainty is
-> a first-class output, not a failure. Humans are always in the loop for uncertain items.
+## Key Principles (Never Break These)
 
 > **No Quote → No Score. No Tier 1/2 Source → No Output.**
 
-> **The pipeline is auditable.** Every decision — what was found, what tier it was assigned,
-> what the LLM classified, what the span verifier checked, what was flagged — is logged in
-> SQLite per run. A UN researcher can trace any score back to its exact source.
+> **The LLM is a classifier, not an oracle.** Uncertainty is a first-class output.
 
-This is what makes it trustworthy enough for the UN to publish.
+> **The pipeline is auditable.** Every decision logged in SQLite. Every score traceable to its exact source.
+
+> **Offline always works.** Heuristic fallback enforces all the same rules.
+
+> **temperature=0.0 always.** Legal scoring must be deterministic.

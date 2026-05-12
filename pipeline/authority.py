@@ -27,6 +27,7 @@ class AuthorityResolvedDoc:
     language: str
     doc_type: str
     articles: list[dict]           # from extract.py: {id, text, section}
+    extraction_method: str = ""
     effective_date: str = ""       # ISO date string
     sha256: str = ""
     conflict_flag: bool = False    # True if this doc conflicts with another Tier 1 doc
@@ -57,6 +58,7 @@ def resolve_authority(docs: list[dict]) -> list[AuthorityResolvedDoc]:
             tier=tier,
             language=doc.get("language", "en"),
             doc_type=doc.get("doc_type", "html"),
+            extraction_method=doc.get("extraction_method", ""),
             articles=doc.get("articles", []),
             effective_date=doc.get("effective_date", ""),
             sha256=doc.get("sha256", ""),

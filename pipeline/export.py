@@ -42,6 +42,7 @@ def export_jsonld(
             "confidence": "rdtii:confidence",
             "verbatim_quote": "rdtii:verbatimQuote",
             "source_url": "rdtii:sourceUrl",
+            "extraction_method": "rdtii:extractionMethod",
             "article_ref": "rdtii:articleRef",
             "human_review_required": "rdtii:humanReviewRequired",
         },
@@ -65,6 +66,7 @@ def export_jsonld(
             "source_url": s.source_url,
             "rdtii:sourceTitle": s.source_title,
             "rdtii:sourceTier": s.source_tier,
+            "extraction_method": s.extraction_method,
             "article_ref": s.article_ref,
             "rdtii:effectiveDate": s.effective_date,
             "rdtii:sha256": s.sha256,
@@ -108,6 +110,7 @@ def export_review_queue(
                 "pillar": s.pillar,
                 "reason": s.human_review_reason,
                 "source_url": s.source_url,
+                "extraction_method": s.extraction_method,
                 "article_ref": s.article_ref,
                 "verbatim_quote": s.verbatim_quote,
             }
@@ -223,6 +226,7 @@ def _render_country_brief_fallback(country: str, run_id: str, confirmed: list, u
             f"- **Score:** `{s.score:.1f}`",
             f"- **Confidence:** {s.confidence}",
             f"- **Source:** {s.source_title} (Tier {s.source_tier})",
+            f"- **Extraction Method:** {s.extraction_method or 'Not recorded'}",
             f"- **Article:** {s.article_ref}",
             f"- **Source URL:** {s.source_url}",
             f"- **Document SHA256:** `{s.sha256[:16]}...`",
@@ -242,6 +246,7 @@ def _render_country_brief_fallback(country: str, run_id: str, confirmed: list, u
             f"- **Reason:** {s.human_review_reason}",
             f"- **Article checked:** {s.article_ref}",
             f"- **Source:** {s.source_title}",
+            f"- **Extraction Method:** {s.extraction_method or 'Not recorded'}",
             "",
         ])
     return "\n".join(lines)

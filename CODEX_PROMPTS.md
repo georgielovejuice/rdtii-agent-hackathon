@@ -766,7 +766,7 @@ actually better for the hackathon because:
   - No API costs ever
   - Runs fully offline (aligns with open-source requirement)
   - No quota limits
-  - Recommended model for 4GB VRAM: qwen2.5:3b
+  - Recommended model: llama3.1:8b (fast) or qwen2.5:7b (strong reasoning)
 
 Ollama uses an OpenAI-compatible API at http://localhost:11434/v1
 so the change in reason.py is minimal.
@@ -774,7 +774,7 @@ so the change in reason.py is minimal.
 ### What Ollama is
 Ollama is a local LLM server. The user runs:
   ollama serve                    ← starts the server at localhost:11434
-  ollama pull qwen2.5:3b          ← downloads the model once
+  ollama pull llama3.1:8b         ← downloads the model once (~5GB)
 Then the pipeline calls it exactly like OpenAI, just pointing at localhost.
 
 ```
@@ -793,7 +793,7 @@ and _call_anthropic():
       """
       Call a local Ollama server via its OpenAI-compatible API.
       Ollama must be running: `ollama serve`
-      Model must be pulled: `ollama pull qwen2.5:3b`
+      Model must be pulled: `ollama pull llama3.1:8b`
       """
       try:
           from openai import OpenAI
@@ -802,7 +802,7 @@ and _call_anthropic():
           return None
 
       base_url  = os.getenv("OLLAMA_BASE_URL", "http://localhost:11434/v1")
-      model     = os.getenv("LLM_MODEL", "qwen2.5:3b")
+      model     = os.getenv("LLM_MODEL", "llama3.1:8b")
 
       try:
           client = OpenAI(
@@ -863,9 +863,9 @@ Replace the LLM Backend section with:
   # ── Ollama (default — free, runs locally, no API key needed) ─────────────
   # Install: https://ollama.com
   # Start server: ollama serve
-  # Pull model:   ollama pull qwen2.5:3b
-  # Model options: qwen2.5:3b | llama3.2:3b | qwen2.5:7b | mistral:7b
-  LLM_MODEL=qwen2.5:3b
+  # Pull model:   ollama pull llama3.1:8b
+  # Model options: llama3.1:8b | qwen2.5:7b | mistral:7b | llama3.2:3b
+  LLM_MODEL=llama3.1:8b
   OLLAMA_BASE_URL=http://localhost:11434/v1
 
   # ── OpenAI (alternative — requires paid API key) ──────────────────────────
@@ -895,7 +895,7 @@ Replace the existing Quick Start section with:
 
   ```bash
   ollama serve                          # start local LLM server
-  ollama pull qwen2.5:3b                # download model once
+  ollama pull llama3.1:8b               # download model once (~5GB)
 
   python -m venv .venv && source .venv/bin/activate
   pip install -r requirements.txt
@@ -929,7 +929,7 @@ TASK 5 — Update Makefile
 Add these targets:
 
   ollama-setup:
-  	ollama pull qwen2.5:3b
+  	ollama pull llama3.1:8b
 
   run-thailand-llm:
   	LLM_BACKEND=ollama python main.py --country thailand --pillars 6 7
@@ -961,7 +961,7 @@ Also add one new test:
       import os
       monkeypatch.setenv("LLM_BACKEND", "ollama")
       monkeypatch.setenv("OLLAMA_BASE_URL", "http://localhost:19999/v1")  # wrong port
-      monkeypatch.setenv("LLM_MODEL", "qwen2.5:3b")
+      monkeypatch.setenv("LLM_MODEL", "llama3.1:8b")
 
       result = _call_ollama("Return {}")
 
@@ -988,7 +988,7 @@ TASK 8 — Update CLAUDE.md tech stack table
 
 In the Core section, update the LLM row:
   LLM (primary):  Ollama — local, free, no API key (LLM_BACKEND=ollama)
-                  Default model: qwen2.5:3b
+                  Default model: llama3.1:8b
                   Also supports: qwen2.5:7b, mistral:7b, llama3.2:3b
   LLM (cloud A):  OpenAI gpt-4o (LLM_BACKEND=openai, OPENAI_API_KEY)
   LLM (cloud B):  Anthropic Claude Sonnet 4 (LLM_BACKEND=anthropic, ANTHROPIC_API_KEY)
@@ -1011,7 +1011,7 @@ Install Ollama on your machine:
 
 Then:
   ollama serve
-  ollama pull qwen2.5:3b
+  ollama pull llama3.1:8b
   python main.py --country thailand --pillars 6 7
 
 Look for [LLM:ollama] in the logs instead of [heuristic].
@@ -1019,12 +1019,11 @@ This confirms real LLM scoring is working at zero cost.
 
 ### Model Recommendations
 
-| Model | Approx. size | Hardware fit | Legal reasoning |
+| Model | Size | Speed | Legal reasoning |
 |---|---|---|---|
-| qwen2.5:3b | ~2GB | Recommended default for 4GB VRAM | Good structured JSON for legal scoring |
-| llama3.2:3b | ~2GB | Fits 4GB VRAM | Good general reasoning |
-| qwen2.5:7b | ~4.7GB | Better with >4GB VRAM or CPU offload | Very good at structured JSON |
-| llama3.1:8b | ~5GB | Does not fit 4GB VRAM comfortably | Good, but not recommended for GTX 1650 |
-| mistral:7b | ~4.1GB | Borderline for 4GB VRAM | Good general reasoning |
+| llama3.1:8b | 5GB | Fast | Good — recommended default |
+| qwen2.5:7b | 4.7GB | Fast | Very good at structured JSON |
+| mistral:7b | 4.1GB | Fast | Good general reasoning |
+| llama3.1:70b | 40GB | Slow | Best quality (if you have RAM) |
 
 Set LLM_MODEL in .env to switch models. No code change needed.

@@ -43,6 +43,7 @@ class ScoredIndicator:
     source_url: str
     source_title: str
     source_tier: int
+    extraction_method: str
     article_ref: str                          # e.g. "Section 28"
     effective_date: str
     sha256: str
@@ -187,6 +188,7 @@ def score_indicator(
             source_url=source_meta.get("url", ""),
             source_title=source_meta.get("title", ""),
             source_tier=source_meta.get("tier", 3),
+            extraction_method=source_meta.get("extraction_method", ""),
             article_ref=article_ref,
             effective_date=source_meta.get("effective_date", ""),
             sha256=source_meta.get("sha256", ""),
@@ -217,6 +219,7 @@ def score_indicator(
             source_url=source_meta.get("url", ""),
             source_title=source_meta.get("title", ""),
             source_tier=source_meta.get("tier", 3),
+            extraction_method=source_meta.get("extraction_method", ""),
             article_ref=article_ref,
             effective_date=source_meta.get("effective_date", ""),
             sha256=source_meta.get("sha256", ""),
@@ -241,6 +244,7 @@ def score_indicator(
         source_url=source_meta.get("url", ""),
         source_title=source_meta.get("title", ""),
         source_tier=source_meta.get("tier", 1),
+        extraction_method=source_meta.get("extraction_method", ""),
         article_ref=article_ref,
         effective_date=source_meta.get("effective_date", ""),
         sha256=source_meta.get("sha256", ""),
@@ -390,6 +394,7 @@ def _uncertain(
         source_url=source_meta.get("url", ""),
         source_title=source_meta.get("title", ""),
         source_tier=source_meta.get("tier", 3),
+        extraction_method=source_meta.get("extraction_method", ""),
         article_ref=article_ref,
         effective_date=source_meta.get("effective_date", ""),
         sha256=source_meta.get("sha256", ""),

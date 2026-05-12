@@ -20,6 +20,7 @@ def test_no_quote_no_score(monkeypatch):
         "url": "https://example.gov/law",
         "title": "Example Law",
         "tier": 1,
+        "extraction_method": "beautifulsoup",
         "effective_date": "",
         "sha256": "abc123",
     }
@@ -75,6 +76,7 @@ def test_tier3_not_scored():
     resolved = resolve_authority([doc])
 
     assert resolved[0].scoreable is False
+    assert resolved[0].extraction_method == ""
     assert filter_scoreable(resolved) == []
 
 
@@ -141,7 +143,12 @@ def test_end_to_end_thailand_offline(monkeypatch):
     assert all(score.source_url for score in all_scores if score.confidence != "UNCERTAIN")
     dataset_path = Path("outputs/thailand_rdtii_dataset.jsonld")
     assert dataset_path.exists()
-    json.loads(dataset_path.read_text())
+    dataset = json.loads(dataset_path.read_text())
+    confirmed = [
+        item for item in dataset["rdtii:indicators"]
+        if item["confidence"] != "UNCERTAIN"
+    ]
+    assert all("extraction_method" in item for item in confirmed)
 
 
 def test_ollama_fallback_on_connection_error(monkeypatch):
