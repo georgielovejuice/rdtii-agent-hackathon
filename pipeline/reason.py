@@ -20,16 +20,22 @@ import json
 import logging
 import os
 import re
-from dataclasses import dataclass, field
+import urllib.error
+import urllib.request
+from dataclasses import dataclass
 from pathlib import Path
 from typing import Literal
+from urllib.parse import urljoin
 
 from pipeline.verify import verify_span, VerificationResult
 
 logger = logging.getLogger(__name__)
 
 RUBRIC_DIR = Path(__file__).parent.parent / "rubrics"
-BACKEND    = os.getenv("LLM_BACKEND", "ollama").lower()
+OLLAMA_DEFAULT_MODEL = "llama3.1:8b"
+OLLAMA_DEFAULT_BASE_URL = "http://localhost:11434"
+OLLAMA_TIMEOUT_SECONDS = float(os.getenv("OLLAMA_TIMEOUT_SECONDS", "20"))
+_OLLAMA_UNAVAILABLE = False
 
 
 @dataclass
@@ -142,9 +148,9 @@ def score_indicator(
         article_ref,
     )
 
-    # ── Call selected LLM backend, or deterministic local fallback ───────────
+    # ── Call Ollama, or deterministic local fallback ─────────────────────────
     raw_response = _call_llm(prompt)
-    mode = f"LLM:{BACKEND}"
+    mode = "LLM:ollama"
 
     if raw_response is None:
         parsed = _heuristic_classify(indicator, article_text, article_ref)
@@ -255,102 +261,58 @@ def score_indicator(
 
 
 def _call_llm(prompt: str) -> str | None:
-    """Call the configured LLM backend, returning None to trigger fallback."""
-    if BACKEND == "ollama":
-        return _call_ollama(prompt)
-    if BACKEND == "openai":
-        return _call_openai(prompt)
-    if BACKEND == "anthropic":
-        return _call_anthropic(prompt)
-    raise ValueError(f"Unknown LLM_BACKEND: {BACKEND}")
+    """Call the only supported LLM backend, returning None to trigger fallback."""
+    return _call_ollama(prompt)
 
 
 def _call_ollama(prompt: str) -> str | None:
     """
-    Call a local Ollama server via its OpenAI-compatible API.
-    Ollama must be running: `ollama serve`
-    Model must be pulled: `ollama pull qwen2.5:3b`
+    Call Ollama through its native HTTP API.
+
+    The server may be local or on a Tailscale address. Configure with:
+      OLLAMA_BASE_URL=http://FRIEND_TAILSCALE_IP:11434
+      OLLAMA_MODEL=llama3.1:8b
     """
-    try:
-        from openai import OpenAI
-    except ModuleNotFoundError:
-        logger.warning("[reason] openai package not installed — falling back to heuristic")
+    global _OLLAMA_UNAVAILABLE
+    if _OLLAMA_UNAVAILABLE:
         return None
 
-    base_url = os.getenv("OLLAMA_BASE_URL", "http://localhost:11434/v1")
-    model = os.getenv("OLLAMA_MODEL", os.getenv("LLM_MODEL", "qwen2.5:3b"))
-    if model in {"gpt-4o", "gpt-4o-mini", "gpt-4-turbo", "o3", "claude-sonnet-4-20250514"}:
-        model = "qwen2.5:3b"
+    base_url = _ollama_base_url()
+    model = os.getenv("OLLAMA_MODEL", OLLAMA_DEFAULT_MODEL)
+    payload = {
+        "model": model,
+        "messages": [{"role": "user", "content": prompt}],
+        "stream": False,
+        "format": "json",
+        "options": {
+            "temperature": 0.0,
+            "num_predict": 512,
+        },
+    }
+    request = urllib.request.Request(
+        url=urljoin(f"{base_url}/", "api/chat"),
+        data=json.dumps(payload).encode("utf-8"),
+        headers={"Content-Type": "application/json"},
+        method="POST",
+    )
 
     try:
-        client = OpenAI(
-            api_key="ollama",
-            base_url=base_url,
-        )
-        response = client.chat.completions.create(
-            model=model,
-            max_tokens=512,
-            messages=[{"role": "user", "content": prompt}],
-            temperature=0.0,
-        )
-        return response.choices[0].message.content.strip()
-    except Exception as e:
+        with urllib.request.urlopen(request, timeout=OLLAMA_TIMEOUT_SECONDS) as response:
+            data = json.loads(response.read().decode("utf-8"))
+        return data.get("message", {}).get("content", "").strip() or None
+    except (OSError, urllib.error.URLError, TimeoutError, json.JSONDecodeError) as e:
+        _OLLAMA_UNAVAILABLE = True
         logger.error(f"[reason] Ollama API call failed: {e}")
-        logger.info("[reason] Is Ollama running? Try: ollama serve")
+        logger.info("[reason] Falling back to heuristic classifier for this run.")
         return None
 
 
-def _call_openai(prompt: str) -> str | None:
-    """Call OpenAI chat completions with JSON-object response mode."""
-    try:
-        from openai import OpenAI
-    except ModuleNotFoundError:
-        logger.warning("[reason] openai package not installed — falling back to heuristic")
-        return None
-
-    api_key = os.getenv("OPENAI_API_KEY")
-    if not api_key:
-        logger.warning("[reason] OPENAI_API_KEY not set — falling back to heuristic")
-        return None
-
-    try:
-        client = OpenAI(api_key=api_key)
-        response = client.chat.completions.create(
-            model=os.getenv("LLM_MODEL", "gpt-4o"),
-            max_tokens=512,
-            messages=[{"role": "user", "content": prompt}],
-            response_format={"type": "json_object"},
-        )
-        return response.choices[0].message.content.strip()
-    except Exception as e:
-        logger.error(f"[reason] OpenAI API call failed: {e}")
-        return None
-
-
-def _call_anthropic(prompt: str) -> str | None:
-    """Call Anthropic messages API."""
-    try:
-        import anthropic as anthropic_sdk
-    except ModuleNotFoundError:
-        logger.warning("[reason] anthropic package not installed — falling back to heuristic")
-        return None
-
-    api_key = os.getenv("ANTHROPIC_API_KEY")
-    if not api_key:
-        logger.warning("[reason] ANTHROPIC_API_KEY not set — falling back to heuristic")
-        return None
-
-    try:
-        client = anthropic_sdk.Anthropic(api_key=api_key)
-        message = client.messages.create(
-            model=os.getenv("LLM_MODEL", "claude-sonnet-4-20250514"),
-            max_tokens=512,
-            messages=[{"role": "user", "content": prompt}],
-        )
-        return message.content[0].text.strip()
-    except Exception as e:
-        logger.error(f"[reason] Anthropic API call failed: {e}")
-        return None
+def _ollama_base_url() -> str:
+    """Return normalized Ollama base URL without OpenAI-compatible suffixes."""
+    base_url = os.getenv("OLLAMA_BASE_URL", OLLAMA_DEFAULT_BASE_URL).strip().rstrip("/")
+    if base_url.endswith("/v1"):
+        base_url = base_url[:-3]
+    return base_url
 
 
 def _parse_llm_response(raw: str) -> dict:

@@ -1,7 +1,10 @@
 from __future__ import annotations
 
 import json
+import sqlite3
 from pathlib import Path
+
+import pytest
 
 from main import run_pipeline
 from pipeline.authority import filter_scoreable, get_tier1_only, resolve_authority
@@ -151,14 +154,71 @@ def test_end_to_end_thailand_offline(monkeypatch):
     assert all("extraction_method" in item for item in confirmed)
 
 
+@pytest.mark.parametrize("country", ["vietnam", "singapore"])
+def test_end_to_end_additional_demo_countries_offline(monkeypatch, country):
+    monkeypatch.delenv("OPENAI_API_KEY", raising=False)
+    monkeypatch.delenv("ANTHROPIC_API_KEY", raising=False)
+    monkeypatch.setattr("pipeline.reason._call_llm", lambda _prompt: None)
+
+    all_scores = run_pipeline(country, [6, 7])
+
+    assert len(all_scores) > 0
+    assert any(score.confidence != "UNCERTAIN" for score in all_scores)
+    assert all(score.verbatim_quote for score in all_scores if score.confidence != "UNCERTAIN")
+    assert all(score.source_url for score in all_scores if score.confidence != "UNCERTAIN")
+    dataset_path = Path(f"outputs/{country}_rdtii_dataset.jsonld")
+    dataset = json.loads(dataset_path.read_text())
+    assert dataset["rdtii:country"] == country
+
+
+def test_jsonld_shape_and_audit_stages(monkeypatch, tmp_path):
+    import pipeline.export as export_module
+
+    output_dir = tmp_path / "outputs"
+    audit_db = tmp_path / "audit" / "runs.sqlite"
+    monkeypatch.setattr(export_module, "OUTPUT_DIR", output_dir)
+    monkeypatch.setattr(export_module, "AUDIT_DB", audit_db)
+    monkeypatch.setattr("pipeline.reason._call_llm", lambda _prompt: None)
+
+    run_pipeline("thailand", [6, 7])
+
+    dataset = json.loads((output_dir / "thailand_rdtii_dataset.jsonld").read_text())
+    required_fields = {
+        "@type",
+        "rdtii:pillar",
+        "rdtii:indicatorId",
+        "rdtii:indicatorName",
+        "score",
+        "confidence",
+        "verbatim_quote",
+        "source_url",
+        "rdtii:sourceTitle",
+        "rdtii:sourceTier",
+        "extraction_method",
+        "article_ref",
+        "rdtii:sha256",
+        "human_review_required",
+    }
+    assert dataset["@type"] == "rdtii:RegulatoryAnalysis"
+    assert dataset["rdtii:indicators"]
+    assert all(required_fields <= set(item) for item in dataset["rdtii:indicators"])
+
+    with sqlite3.connect(audit_db) as conn:
+        stages = {
+            row[0]
+            for row in conn.execute("SELECT DISTINCT stage FROM audit").fetchall()
+        }
+    assert {"discover", "extract", "authority", "retrieval", "reason", "export"} <= stages
+
+
 def test_ollama_fallback_on_connection_error(monkeypatch):
     """
     If Ollama is not running, _call_ollama() must return None
     and the pipeline must fall back to heuristic — never crash.
     """
-    monkeypatch.setenv("LLM_BACKEND", "ollama")
     monkeypatch.setenv("OLLAMA_BASE_URL", "http://localhost:19999/v1")
-    monkeypatch.setenv("LLM_MODEL", "llama3.1:8b")
+    monkeypatch.setenv("OLLAMA_MODEL", "llama3.1:8b")
+    monkeypatch.setattr("pipeline.reason._OLLAMA_UNAVAILABLE", False)
 
     result = _call_ollama("Return {}")
 

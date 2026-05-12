@@ -198,9 +198,7 @@ Supported LLM backends:
 
 | Backend | Configuration | Notes |
 |---|---|---|
-| Ollama | `LLM_BACKEND=ollama`, default model `qwen2.5:3b` | Default local backend in current code. |
-| OpenAI | `LLM_BACKEND=openai`, `OPENAI_API_KEY`, optional `LLM_MODEL` | Defaults to `gpt-4o` in current code. |
-| Anthropic | `LLM_BACKEND=anthropic`, `ANTHROPIC_API_KEY`, optional `LLM_MODEL` | Defaults to `claude-sonnet-4-20250514` in current code. |
+| Ollama | `OLLAMA_BASE_URL`, `OLLAMA_MODEL=llama3.1:8b` | Only supported LLM backend in current code. |
 | Heuristic | Automatic fallback | Uses exact phrase rules and returns `UNCERTAIN` if no quoteable evidence is found. |
 
 Scoring output model: `ScoredIndicator`.
@@ -322,8 +320,7 @@ Important inconsistency: the `un-hackathon` README mentions `facebook/bart-large
 
 | Area | Tools |
 |---|---|
-| Local LLM | Ollama with `qwen2.5:3b` default. |
-| Cloud LLM | OpenAI SDK, Anthropic SDK. |
+| Local/remote LLM | Ollama with `llama3.1:8b` on local machine or friend GPU over Tailscale. |
 | Offline fallback | Deterministic heuristic classifier in `pipeline/reason.py`. |
 | Streamlit NLI | `sentence-transformers` `CrossEncoder`, model `cross-encoder/nli-distilroberta-base`. |
 | Embeddings | `sentence-transformers/paraphrase-multilingual-MiniLM-L12-v2`. |
@@ -430,7 +427,7 @@ This is a better fit for regulatory analysis than a generic chatbot/RAG system b
 
 ```bash
 ollama serve
-ollama pull qwen2.5:3b
+ollama pull llama3.1:8b
 python main.py --country thailand --pillars 6 7
 ```
 
@@ -438,20 +435,11 @@ Uses local Ollama if available, then verifies quotes before accepting output.
 
 ### Cloud LLM Mode
 
-OpenAI:
+Remote Ollama over Tailscale:
 
 ```bash
-export LLM_BACKEND=openai
-export OPENAI_API_KEY=your_key_here
-export LLM_MODEL=gpt-4o
-python main.py --country thailand --pillars 6 7
-```
-
-Anthropic:
-
-```bash
-export LLM_BACKEND=anthropic
-export ANTHROPIC_API_KEY=your_key_here
+export OLLAMA_BASE_URL=http://FRIEND_TAILSCALE_IP:11434
+export OLLAMA_MODEL=llama3.1:8b
 python main.py --country thailand --pillars 6 7
 ```
 

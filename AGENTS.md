@@ -165,6 +165,43 @@ make test
 
 Files changed:
 
+- `CLAUDE.md`
+- `CODEX_PROMPTS.md`
+- `pipeline/reason.py`
+- `tests/test_pipeline.py`
+- `AGENTS.md`
+
+What changed:
+
+- Aligned project documentation around the current Ollama-only backend policy
+  at that point in the build history.
+- Added Vietnam and Singapore offline end-to-end tests.
+- Added JSON-LD shape and SQLite audit-stage test coverage.
+- Made Ollama fallback fail fast when the local server is unavailable by
+  disabling OpenAI-client retries and caching the unavailable state for the
+  current process.
+- Updated this required agent change log.
+
+Verification:
+
+- `pytest tests/ -v` -> 12 passed.
+- `python main.py --country thailand --pillars 6 7` ->
+  completed with heuristic fallback and confirmed scores.
+- `python main.py --country vietnam --pillars 6 7` ->
+  completed with heuristic fallback and confirmed scores.
+- `python main.py --country singapore --pillars 6 7` ->
+  completed with heuristic fallback and confirmed scores.
+- `python -m json.tool outputs/{thailand,vietnam,singapore}_rdtii_dataset.jsonld`
+  -> all valid JSON.
+- Checked audit DB stages include discover, extract, authority, retrieval,
+  reason, and export.
+- Checked README required sections, answer word counts, Q1 sub-answer limits,
+  demo output files, and a clean temporary output run.
+
+### 2026-05-12
+
+Files changed:
+
 - `main.py`
 - `pipeline/authority.py`
 - `pipeline/reason.py`

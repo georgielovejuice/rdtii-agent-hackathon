@@ -22,33 +22,37 @@ Install Ollama from https://ollama.com, then:
 
 ```bash
 ollama serve                          # start local LLM server
-ollama pull qwen2.5:3b                # download model once
+ollama pull llama3.1:8b               # download model once
 
 python -m venv .venv && source .venv/bin/activate
 pip install -r requirements.txt
 
-# LLM_BACKEND defaults to ollama — no API key needed
 python main.py --country thailand --pillars 6 7
 ```
 
-### Option 2 — OpenAI API
+For a remote Ollama server on a friend's machine, set the Tailscale URL:
 
 ```bash
-python -m venv .venv && source .venv/bin/activate
-pip install -r requirements.txt
-export LLM_BACKEND=openai
-export OPENAI_API_KEY=your_key_here
-export LLM_MODEL=gpt-4o
+export OLLAMA_BASE_URL=http://FRIEND_TAILSCALE_IP:11434
+export OLLAMA_MODEL=llama3.1:8b
 python main.py --country thailand --pillars 6 7
 ```
 
-### Option 3 — Offline / no LLM (demo mode)
+### Option 2 — Offline / no LLM (demo mode)
 
-No API key or Ollama required. The pipeline uses the bundled heuristic classifier. All anti-hallucination rules still apply.
+If Ollama is unavailable, the pipeline falls back to the bundled heuristic classifier. All anti-hallucination rules still apply.
 
 ```bash
 python main.py --country thailand --pillars 6 7
 ```
+
+### Browser UI
+
+```bash
+streamlit run app.py
+```
+
+The UI calls the same backend pipeline used by the CLI and reads the generated JSON-LD, country brief, and review queue files.
 
 ## Output Example
 
@@ -101,13 +105,9 @@ The general pipeline does not require new scoring logic for every country. New l
 
 ## LLM Backends
 
-Ollama is the default backend. It runs locally at `http://localhost:11434/v1` and uses `LLM_MODEL=qwen2.5:3b` unless configured otherwise.
+Ollama is the only supported LLM backend. It runs locally or on a private Tailscale address and uses `OLLAMA_MODEL=llama3.1:8b` unless configured otherwise.
 
-OpenAI is supported as an alternative backend. Set `LLM_BACKEND=openai`, `OPENAI_API_KEY`, and optionally `LLM_MODEL`, which defaults to `gpt-4o`.
-
-Anthropic is supported as an alternative backend. Set `LLM_BACKEND=anthropic`, `ANTHROPIC_API_KEY`, and `LLM_MODEL=claude-sonnet-4-20250514`.
-
-When the selected package or API key is unavailable, the system falls back to the local heuristic classifier. The fallback still enforces No Quote, No Score and never invents citations.
+When Ollama is unavailable, the system falls back to the local heuristic classifier. The fallback still enforces No Quote, No Score and never invents citations.
 
 ## License
 

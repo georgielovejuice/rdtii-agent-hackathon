@@ -16,7 +16,7 @@
 
 ### What is working
 - Pipeline runs end-to-end for Thailand, Vietnam, Singapore (offline mode)
-- Ollama backend wired — LLM_BACKEND=ollama, default model configurable
+- Ollama backend wired — direct native HTTP API, default model configurable
 - Remote GPU setup via Tailscale (friend's RTX 5070 12GB)
 - "No Quote, No Score" rule enforced in both LLM and heuristic modes
 - 3-tier source authority system with conflict detection
@@ -32,8 +32,7 @@
 
 ### LLM Backend
 - Primary: Ollama on friend's RTX 5070 12GB via Tailscale
-- Default model: phi3.5:3.8b (fast, reliable)
-- Upgrade model: qwen2.5:7b (better legal reasoning, ~6GB VRAM)
+- Required model: llama3.1:8b
 - Fallback: Local heuristic classifier (no GPU needed, all rules still apply)
 
 ---
@@ -203,9 +202,8 @@ After LLM produces a classification + quote:
 |---|---|---|
 | Language | Python 3.11+ | Ecosystem depth, UN-friendly |
 | Orchestration | Custom pipeline | No LangChain — too opaque for UN auditors |
-| LLM (primary) | Ollama on remote RTX 5070 via Tailscale | Free, no quota, best quality model available |
-| LLM default model | phi3.5:3.8b | Fast, reliable, ~3GB VRAM |
-| LLM upgrade model | qwen2.5:7b | Better legal reasoning, ~6GB VRAM |
+| LLM (primary) | Ollama on remote RTX 5070 via Tailscale | Free, no quota, private network |
+| LLM model | llama3.1:8b | Only supported LLM model for the demo |
 | LLM (offline fallback) | Local heuristic classifier | Fully air-gapped, all rules still apply |
 | License | MIT open-source | Required by hackathon |
 
@@ -288,19 +286,13 @@ Tailscale private network
       ↓
 Friend's RTX 5070 12GB (runs Ollama)
       ↓
-phi3.5:3.8b or qwen2.5:7b
+llama3.1:8b
 ```
 
 **Your .env:**
 ```
-LLM_BACKEND=ollama
-OLLAMA_MODEL=phi3.5:3.8b
-OLLAMA_BASE_URL=http://FRIEND_TAILSCALE_IP:11434/v1
-```
-
-**Upgrade to better model when ready:**
-```
-OLLAMA_MODEL=qwen2.5:7b
+OLLAMA_MODEL=llama3.1:8b
+OLLAMA_BASE_URL=http://FRIEND_TAILSCALE_IP:11434
 ```
 
 ---
