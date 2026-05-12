@@ -27,7 +27,11 @@ Output per document:
 from __future__ import annotations
 import hashlib
 import logging
+import os
 import re
+import tempfile
+import urllib.parse
+import urllib.request
 from pathlib import Path
 
 logger = logging.getLogger(__name__)
@@ -70,12 +74,8 @@ def extract_document(source) -> dict:
 def _extract_pdf(url: str) -> tuple[str, str]:
     """Try Docling first, fall back to Surya OCR, then Tesseract."""
     fallback = _demo_fallback_text(url)
-    # Download PDF to temp file
-    import urllib.request, tempfile, os
     try:
-        with tempfile.NamedTemporaryFile(suffix=".pdf", delete=False) as tmp:
-            urllib.request.urlretrieve(url, tmp.name)
-            tmp_path = tmp.name
+        tmp_path, should_cleanup = _resolve_pdf_input(url)
     except Exception as e:
         if fallback:
             logger.warning(f"[extract] Download failed for {url}: {e} — using bundled demo text")
@@ -90,7 +90,7 @@ def _extract_pdf(url: str) -> tuple[str, str]:
         result    = converter.convert(tmp_path)
         text      = result.document.export_to_markdown()
         if text and len(text) > 200:
-            os.unlink(tmp_path)
+            _cleanup_temp_file(tmp_path, should_cleanup)
             return text, "docling"
     except Exception as e:
         logger.warning(f"[extract] Docling failed: {e} — trying Surya OCR")
@@ -112,7 +112,7 @@ def _extract_pdf(url: str) -> tuple[str, str]:
             line.text for page in predictions for line in page.text_lines
         )
         if text and len(text) > 100:
-            os.unlink(tmp_path)
+            _cleanup_temp_file(tmp_path, should_cleanup)
             return text, "surya_ocr"
     except Exception as e:
         logger.warning(f"[extract] Surya OCR failed: {e} — trying Tesseract")
@@ -123,15 +123,12 @@ def _extract_pdf(url: str) -> tuple[str, str]:
         from pdf2image import convert_from_path
         images = convert_from_path(tmp_path)
         text   = "\n".join(pytesseract.image_to_string(img) for img in images)
-        os.unlink(tmp_path)
+        _cleanup_temp_file(tmp_path, should_cleanup)
         return text, "tesseract"
     except Exception as e:
         logger.error(f"[extract] Tesseract failed: {e}")
 
-    try:
-        os.unlink(tmp_path)
-    except Exception:
-        pass
+    _cleanup_temp_file(tmp_path, should_cleanup)
     if fallback:
         return fallback, "bundled_demo_text"
     return "", "failed"
@@ -140,6 +137,15 @@ def _extract_pdf(url: str) -> tuple[str, str]:
 def _extract_html(url: str) -> tuple[str, str]:
     """Extract text from HTML page using requests + BeautifulSoup."""
     fallback = _demo_fallback_text(url)
+    if _is_file_url(url):
+        try:
+            path = _path_from_file_url(url)
+            text = path.read_text(encoding="utf-8")
+            return text, "local_file"
+        except Exception as e:
+            logger.warning(f"[extract] Local HTML extraction failed for {url}: {e}")
+            return "", "failed"
+
     try:
         import requests
         from bs4 import BeautifulSoup
@@ -160,6 +166,44 @@ def _extract_html(url: str) -> tuple[str, str]:
             return fallback, "bundled_demo_text"
         logger.warning(f"[extract] HTML extraction failed for {url}: {e}")
         return "", "failed"
+
+
+def _resolve_pdf_input(url: str) -> tuple[str, bool]:
+    """Return a local PDF path and whether it should be deleted after use."""
+    if _is_file_url(url):
+        path = _path_from_file_url(url)
+        if not path.exists():
+            raise FileNotFoundError(path)
+        if not path.is_file():
+            raise ValueError(f"Not a file: {path}")
+        return str(path), False
+
+    with tempfile.NamedTemporaryFile(suffix=".pdf", delete=False) as tmp:
+        urllib.request.urlretrieve(url, tmp.name)
+        return tmp.name, True
+
+
+def _is_file_url(url: str) -> bool:
+    """Return True for local file URLs."""
+    return urllib.parse.urlparse(url).scheme == "file"
+
+
+def _path_from_file_url(url: str) -> Path:
+    """Convert a file:// URL into a filesystem path."""
+    parsed = urllib.parse.urlparse(url)
+    if parsed.netloc not in {"", "localhost"}:
+        raise ValueError(f"Only local file URLs are supported: {url}")
+    return Path(urllib.request.url2pathname(parsed.path)).expanduser()
+
+
+def _cleanup_temp_file(path: str, should_cleanup: bool) -> None:
+    """Delete temp files created for downloaded PDFs."""
+    if not should_cleanup:
+        return
+    try:
+        os.unlink(path)
+    except OSError:
+        pass
 
 
 def _parse_articles(text: str, language: str = "en") -> list[dict]:

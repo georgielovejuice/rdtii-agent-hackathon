@@ -69,15 +69,20 @@ streamlit run app.py
 - The pipeline must keep working without the LLM through heuristic fallback.
 - The SQLite audit trail must keep logging all six pipeline stages.
 
+## Recently Implemented From Enhancement Roadmap
+
+- Local `file://` sources are supported for HTML/text and PDF extraction.
+- Ollama calls are gated by a cheap indicator/article relevance pre-filter.
+- The pre-filter reduces avoidable LLM calls while still running heuristic
+  fallback for exact phrase demo scoring.
+
 ## Current Next Tasks
 
-1. Improve real PDF extraction so the project uses full legal documents more
-   often and bundled fallback text less often.
-2. Add keyword pre-filtering before LLM calls to reduce latency and load on the
-   remote Ollama server.
-3. Strengthen retrieval dependencies and fallback behavior for ChromaDB and
+1. Point seed sources at manually downloaded official PDFs where government DNS
+   blocks live downloads.
+2. Strengthen retrieval dependencies and fallback behavior for ChromaDB and
    NetworkX.
-4. Continue keeping the Streamlit UI thin: it should call the backend pipeline
+3. Continue keeping the Streamlit UI thin: it should call the backend pipeline
    and display existing JSON-LD, country brief, and review queue outputs.
-5. Add database-backed ingestion later only after the current CLI/UI pipeline is
+4. Add database-backed ingestion later only after the current CLI/UI pipeline is
    stable.

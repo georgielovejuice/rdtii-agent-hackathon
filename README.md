@@ -103,11 +103,25 @@ These countries show a useful range of regulatory approaches: Singapore is compa
 
 The general pipeline does not require new scoring logic for every country. New legal texts are matched against the existing RDTII Pillar 6 and 7 rubrics.
 
+Local files are supported with `file://` URLs. This is the recommended path when an official government PDF is reachable in a browser but blocked from automated download:
+
+```python
+{
+  "url": "file:///absolute/path/to/official-law.pdf",
+  "title": "Official Law Title",
+  "language": "en",
+  "doc_type": "pdf",
+  "pillar_hint": [6, 7],
+}
+```
+
 ## LLM Backends
 
 Ollama is the only supported LLM backend. It runs locally or on a private Tailscale address and uses `OLLAMA_MODEL=llama3.1:8b` unless configured otherwise.
 
 When Ollama is unavailable, the system falls back to the local heuristic classifier. The fallback still enforces No Quote, No Score and never invents citations.
+
+The scoring stage uses a cheap relevance pre-filter before calling Ollama. Unrelated article/indicator pairs go straight to deterministic fallback, reducing latency and load on the remote GPU while preserving auditability.
 
 ## License
 

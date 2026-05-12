@@ -148,8 +148,8 @@ def score_indicator(
         article_ref,
     )
 
-    # ── Call Ollama, or deterministic local fallback ─────────────────────────
-    raw_response = _call_llm(prompt)
+    # ── Call Ollama only for plausibly relevant article/indicator pairs ──────
+    raw_response = _call_llm(prompt) if _is_relevant_for_llm(indicator, article_text) else None
     mode = "LLM:ollama"
 
     if raw_response is None:
@@ -308,7 +308,7 @@ def _call_ollama(prompt: str) -> str | None:
 
 
 def _ollama_base_url() -> str:
-    """Return normalized Ollama base URL without OpenAI-compatible suffixes."""
+    """Return normalized Ollama base URL."""
     base_url = os.getenv("OLLAMA_BASE_URL", OLLAMA_DEFAULT_BASE_URL).strip().rstrip("/")
     if base_url.endswith("/v1"):
         base_url = base_url[:-3]
@@ -336,6 +336,26 @@ def _parse_llm_response(raw: str) -> dict:
         parsed["score"] = float(parsed["score"])
 
     return parsed
+
+
+def _is_relevant_for_llm(indicator: dict, article_text: str) -> bool:
+    """
+    Cheap pre-filter before expensive LLM calls.
+
+    The heuristic fallback still runs when this returns False, so exact demo
+    scoring remains available without spending an Ollama request on unrelated
+    articles.
+    """
+    text = (article_text or "").lower()
+    if not text.strip():
+        return False
+
+    keywords = [kw.lower() for kw in indicator.get("keywords", []) if kw]
+    if any(keyword in text for keyword in keywords):
+        return True
+
+    rule_phrases = [phrase.lower() for _, phrase in _heuristic_rules().get(indicator["id"], [])]
+    return any(phrase in text for phrase in rule_phrases)
 
 
 def _uncertain(
@@ -402,42 +422,7 @@ def _heuristic_classify(indicator: dict, article_text: str, article_ref: str) ->
     low = text.lower()
     ind_id = indicator["id"]
 
-    rules = {
-        "6.1": [
-            (0.5, "shall have adequate data protection standard"),
-            (0.5, "may send or transfer the personal data to a foreign country where the data subject has given consent"),
-            (1.0, "set up branches or representative offices in Vietnam"),
-        ],
-        "6.2": [
-            (1.0, "shall store such data in Vietnam for a prescribed period of time"),
-            (1.0, "store data in Vietnam for a period of time as prescribed by the Government"),
-        ],
-        "6.4": [
-            (0.5, "shall have adequate data protection standard"),
-            (0.5, "data subject has given consent after having been informed"),
-            (0.5, "consented to by the data subject and meet the conditions prescribed"),
-            (0.5, "assess the impact of transferring personal data overseas"),
-            (0.5, "must not transfer personal data to a country or territory outside Singapore except"),
-            (0.5, "comparable to the protection under this Act"),
-        ],
-        "7.1": [
-            (0.0, "Personal Data Protection Act B.E. 2562"),
-            (0.0, "Personal Data Protection Act B.E. 2562 (2019)"),
-            (0.0, "Decree 13/2023/ND-CP on Personal Data Protection"),
-            (0.0, "Personal Data Protection Act 2012"),
-        ],
-        "7.2": [
-            (0.0, "making reasonable security arrangements to prevent unauthorised access"),
-        ],
-        "7.3": [
-            (0.5, "shall designate a data protection officer"),
-            (0.5, "require regular monitoring of personal data"),
-        ],
-        "7.4": [
-            (0.5, "enter the premises of the data controller or data processor during working hours for the purpose of inspection"),
-            (0.5, "seize or attach documents, evidence or any other things"),
-        ],
-    }
+    rules = _heuristic_rules()
 
     for score, phrase in rules.get(ind_id, []):
         quote = _exact_phrase(text, phrase)
@@ -476,3 +461,43 @@ def _exact_phrase(text: str, phrase: str) -> str:
     """Return the exact source substring matching phrase case-insensitively."""
     match = re.search(re.escape(phrase), text, re.IGNORECASE)
     return text[match.start():match.end()] if match else ""
+
+
+def _heuristic_rules() -> dict[str, list[tuple[float, str]]]:
+    """Exact phrase rules used by the offline classifier and LLM pre-filter."""
+    return {
+        "6.1": [
+            (0.5, "shall have adequate data protection standard"),
+            (0.5, "may send or transfer the personal data to a foreign country where the data subject has given consent"),
+            (1.0, "set up branches or representative offices in Vietnam"),
+        ],
+        "6.2": [
+            (1.0, "shall store such data in Vietnam for a prescribed period of time"),
+            (1.0, "store data in Vietnam for a period of time as prescribed by the Government"),
+        ],
+        "6.4": [
+            (0.5, "shall have adequate data protection standard"),
+            (0.5, "data subject has given consent after having been informed"),
+            (0.5, "consented to by the data subject and meet the conditions prescribed"),
+            (0.5, "assess the impact of transferring personal data overseas"),
+            (0.5, "must not transfer personal data to a country or territory outside Singapore except"),
+            (0.5, "comparable to the protection under this Act"),
+        ],
+        "7.1": [
+            (0.0, "Personal Data Protection Act B.E. 2562"),
+            (0.0, "Personal Data Protection Act B.E. 2562 (2019)"),
+            (0.0, "Decree 13/2023/ND-CP on Personal Data Protection"),
+            (0.0, "Personal Data Protection Act 2012"),
+        ],
+        "7.2": [
+            (0.0, "making reasonable security arrangements to prevent unauthorised access"),
+        ],
+        "7.3": [
+            (0.5, "shall designate a data protection officer"),
+            (0.5, "require regular monitoring of personal data"),
+        ],
+        "7.4": [
+            (0.5, "enter the premises of the data controller or data processor during working hours for the purpose of inspection"),
+            (0.5, "seize or attach documents, evidence or any other things"),
+        ],
+    }

@@ -500,13 +500,15 @@ Implemented and working in code:
 - Seed-based source discovery for three countries.
 - Authority tier classification.
 - PDF and HTML extraction paths with fallback demo text.
+- Local `file://` document extraction for manually downloaded official sources.
 - Article/section parser.
 - ChromaDB semantic retrieval with keyword fallback.
 - NetworkX cross-reference graph.
 - RDTII rubrics as JSON.
 - Constrained prompts for LLM scoring.
-- Ollama, OpenAI, and Anthropic backend selection.
+- Ollama-only backend selection with heuristic fallback.
 - Offline heuristic scoring.
+- Keyword/relevance pre-filter before Ollama calls to reduce unnecessary LLM work.
 - Span verification.
 - JSON-LD export.
 - Markdown brief export.
@@ -543,7 +545,8 @@ Partially implemented or mostly documented:
    - Scrapy, Playwright, language detection, translation, and WeasyPrint are listed, but not fully wired into the active pipeline.
 
 5. The full pipeline has demo fallbacks.
-   - This is good for reliable demos, but production claims must clearly separate extracted live source text from bundled sample text.
+   - This is good for reliable demos, and outputs now expose `extraction_method`
+     so reviewers can distinguish live/local extraction from bundled sample text.
 
 6. Conflict resolution is simple.
    - Current detection is based on duplicate section IDs and length differences. A production system needs date/version rules and semantic comparison.
@@ -560,12 +563,12 @@ Partially implemented or mostly documented:
 2. Decide the final demo country set: Thailand, Vietnam, Singapore, or Thailand, Vietnam, Indonesia.
 3. Align Pillar 7 indicators between both apps.
 4. Refactor the Streamlit app to call `rdtii-agent.run_pipeline()` or shared service functions instead of maintaining separate mapper logic.
-5. Add a clear flag in outputs showing whether evidence came from live extraction or bundled fallback text.
+5. Point seed sources at local official PDFs when government sites block automated download.
 6. Replace simple conflict detection with version-aware authority resolution.
 7. Remove accidental brace directories from `rdtii-agent` after inspection.
-8. Add tests for Vietnam and Singapore end-to-end offline runs, not only Thailand.
-9. Add tests for JSON-LD shape and audit DB contents.
-10. Update documentation so model names, countries, and rubrics are consistent.
+8. Add broader tests for source ingestion and output exports as new pipeline stages are added.
+9. Add database-backed ingestion only after the current CLI/UI pipeline remains stable.
+10. Keep documentation aligned with the Ollama-only backend and `llama3.1:8b` model policy.
 
 ## Suggested Final Architecture
 

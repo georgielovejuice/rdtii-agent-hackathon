@@ -84,7 +84,7 @@ According to the reviewed docs, `rdtii-agent` currently includes:
 - ChromaDB/embedding retrieval with keyword fallback.
 - NetworkX-based cross-reference graph.
 - RDTII rubrics in JSON for Pillars 6 and 7.
-- LLM backends for Ollama, OpenAI, Anthropic, plus heuristic fallback.
+- Ollama-only LLM backend with heuristic fallback.
 - Span verification in `pipeline/verify.py`.
 - JSON-LD, Markdown country briefs, review queue JSON, and SQLite audit output.
 - Pytest coverage for important no-quote, verifier, authority, and offline
@@ -165,6 +165,35 @@ make test
 
 Files changed:
 
+- `pipeline/extract.py`
+- `pipeline/reason.py`
+- `tests/test_pipeline.py`
+- `README.md`
+- `CODEX_PROMPTS.md`
+- `PROJECT_ARCHITECTURE_ANALYSIS.md`
+- `AGENTS.md`
+
+What changed:
+
+- Implemented roadmap item "Real PDF via local file path" by adding local
+  `file://` handling for extraction.
+- Implemented roadmap item "Keyword pre-filter before LLM calls" by adding a
+  relevance gate before Ollama requests.
+- Kept heuristic fallback active after pre-filtering so exact-phrase demo
+  scoring remains deterministic.
+- Added tests for local file extraction and skipping irrelevant Ollama calls.
+- Updated docs to describe local official-source ingestion and the LLM
+  pre-filter.
+- Updated this required agent change log.
+
+Verification:
+
+- `pytest tests/ -v` -> 14 passed.
+
+### 2026-05-12
+
+Files changed:
+
 - `CLAUDE.md`
 - `CODEX_PROMPTS.md`
 - `pipeline/reason.py`
@@ -178,8 +207,7 @@ What changed:
 - Added Vietnam and Singapore offline end-to-end tests.
 - Added JSON-LD shape and SQLite audit-stage test coverage.
 - Made Ollama fallback fail fast when the local server is unavailable by
-  disabling OpenAI-client retries and caching the unavailable state for the
-  current process.
+  caching the unavailable state for the current process.
 - Updated this required agent change log.
 
 Verification:

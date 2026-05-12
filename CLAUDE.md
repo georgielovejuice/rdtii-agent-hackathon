@@ -41,7 +41,7 @@
 
 | What others will do | What we do |
 |---|---|
-| LangChain + GPT-4 + plain vector search | Hybrid RAG + Knowledge Graph + span-level verification |
+| LangChain + hosted LLM + plain vector search | Hybrid RAG + Knowledge Graph + span-level verification |
 | Demo on 1 country, English only | Multi-source, multi-language, conflict resolution |
 | Output: JSON blob | Output: Audit trail + confidence score + human review flag |
 | Trust the LLM to interpret freely | Constrain LLM with hardcoded rubric — scores only what it can cite |

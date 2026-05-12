@@ -8,6 +8,8 @@ import pytest
 
 from main import run_pipeline
 from pipeline.authority import filter_scoreable, get_tier1_only, resolve_authority
+from pipeline.discover import DiscoveredSource
+from pipeline.extract import extract_document
 from pipeline.reason import _call_ollama, _heuristic_classify, load_rubric, score_indicator
 from pipeline.verify import verify_span
 
@@ -133,9 +135,56 @@ def test_heuristic_finds_exact_phrase_thailand():
     assert result["verbatim_quote"] in text
 
 
+def test_local_file_url_extraction(tmp_path):
+    law_path = tmp_path / "sample_law.html"
+    law_path.write_text(
+        "Sample Law\n\nSection 1. Personal data protection law text for local extraction.",
+        encoding="utf-8",
+    )
+    source = DiscoveredSource(
+        url=law_path.as_uri(),
+        title="Sample Local Law",
+        language="en",
+        doc_type="html",
+        tier=1,
+        pillar_hint=[7],
+    )
+
+    doc = extract_document(source)
+
+    assert doc["extraction_method"] == "local_file"
+    assert doc["articles"]
+    assert doc["sha256"]
+
+
+def test_llm_prefilter_skips_irrelevant_article(monkeypatch):
+    indicator = load_rubric(6)["indicators"][0]
+    article = {
+        "id": "s1",
+        "section": "Section 1",
+        "text": "This section establishes the short title of the statute.",
+    }
+    source_meta = {
+        "url": "https://example.gov/law",
+        "title": "Example Law",
+        "tier": 1,
+        "extraction_method": "beautifulsoup",
+        "effective_date": "",
+        "sha256": "abc123",
+    }
+
+    def fail_if_called(_prompt):
+        raise AssertionError("LLM should not be called for irrelevant article text")
+
+    monkeypatch.setattr("pipeline.reason._call_llm", fail_if_called)
+
+    result = score_indicator(indicator, article, source_meta)
+
+    assert result.confidence == "UNCERTAIN"
+    assert result.human_review_required is True
+
+
 def test_end_to_end_thailand_offline(monkeypatch):
-    monkeypatch.delenv("OPENAI_API_KEY", raising=False)
-    monkeypatch.delenv("ANTHROPIC_API_KEY", raising=False)
     monkeypatch.setattr("pipeline.reason._call_llm", lambda _prompt: None)
 
     all_scores = run_pipeline("thailand", [6, 7])
@@ -156,8 +205,6 @@ def test_end_to_end_thailand_offline(monkeypatch):
 
 @pytest.mark.parametrize("country", ["vietnam", "singapore"])
 def test_end_to_end_additional_demo_countries_offline(monkeypatch, country):
-    monkeypatch.delenv("OPENAI_API_KEY", raising=False)
-    monkeypatch.delenv("ANTHROPIC_API_KEY", raising=False)
     monkeypatch.setattr("pipeline.reason._call_llm", lambda _prompt: None)
 
     all_scores = run_pipeline(country, [6, 7])
