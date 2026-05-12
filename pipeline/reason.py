@@ -184,6 +184,19 @@ def score_indicator(
 
     # ── UNCERTAIN from LLM ────────────────────────────────────────────────────
     if score is None or confidence == "UNCERTAIN":
+        heuristic_score = _verified_heuristic_score(
+            indicator,
+            article_text,
+            article_ref,
+            source_meta,
+            pillar_num,
+        )
+        if heuristic_score:
+            logger.info(
+                f"[reason] Verified heuristic fallback recovered indicator {indicator['id']} "
+                f"after UNCERTAIN LLM result."
+            )
+            return heuristic_score
         return ScoredIndicator(
             pillar=pillar_num,
             indicator_id=indicator["id"],
@@ -215,6 +228,19 @@ def score_indicator(
             f"[reason] Span verification FAILED for indicator {indicator['id']}: "
             f"{verification.failure_reason}"
         )
+        heuristic_result = _verified_heuristic_score(
+            indicator,
+            article_text,
+            article_ref,
+            source_meta,
+            pillar_num,
+        )
+        if heuristic_result:
+            logger.info(
+                f"[reason] Verified heuristic fallback recovered indicator {indicator['id']} "
+                f"after unverified LLM quote."
+            )
+            return heuristic_result
         return ScoredIndicator(
             pillar=pillar_num,
             indicator_id=indicator["id"],
@@ -257,6 +283,48 @@ def score_indicator(
         rationale=rationale,
         human_review_required=False,
         verification=verification,
+    )
+
+
+def _verified_heuristic_score(
+    indicator: dict,
+    article_text: str,
+    article_ref: str,
+    source_meta: dict,
+    pillar_num: int,
+) -> ScoredIndicator | None:
+    """Return a heuristic score only when its exact quote verifies against source text."""
+    heuristic = _heuristic_classify(indicator, article_text, article_ref)
+    heuristic_score = heuristic.get("score")
+    heuristic_quote = heuristic.get("verbatim_quote", "")
+    if heuristic_score is None or not heuristic_quote:
+        return None
+
+    heuristic_verification = verify_span(
+        llm_quote=heuristic_quote,
+        source_text=article_text,
+        llm_entities=_extract_entities(heuristic_quote, article_ref),
+    )
+    if not heuristic_verification.passed:
+        return None
+
+    return ScoredIndicator(
+        pillar=pillar_num,
+        indicator_id=indicator["id"],
+        indicator_name=indicator["name"],
+        score=float(heuristic_score),
+        confidence=heuristic_verification.confidence,
+        verbatim_quote=heuristic_quote,
+        source_url=source_meta.get("url", ""),
+        source_title=source_meta.get("title", ""),
+        source_tier=source_meta.get("tier", 1),
+        extraction_method=source_meta.get("extraction_method", ""),
+        article_ref=article_ref,
+        effective_date=source_meta.get("effective_date", ""),
+        sha256=source_meta.get("sha256", ""),
+        rationale=heuristic.get("rationale", ""),
+        human_review_required=False,
+        verification=heuristic_verification,
     )
 
 
@@ -459,7 +527,9 @@ def _heuristic_classify(indicator: dict, article_text: str, article_ref: str) ->
 
 def _exact_phrase(text: str, phrase: str) -> str:
     """Return the exact source substring matching phrase case-insensitively."""
-    match = re.search(re.escape(phrase), text, re.IGNORECASE)
+    escaped_parts = [re.escape(part) for part in phrase.split()]
+    pattern = r"\s+".join(escaped_parts)
+    match = re.search(pattern, text, re.IGNORECASE)
     return text[match.start():match.end()] if match else ""
 
 
@@ -486,6 +556,7 @@ def _heuristic_rules() -> dict[str, list[tuple[float, str]]]:
         "7.1": [
             (0.0, "Personal Data Protection Act B.E. 2562"),
             (0.0, "Personal Data Protection Act B.E. 2562 (2019)"),
+            (0.0, "This Act applies to the collection, use, or disclosure of Personal Data"),
             (0.0, "Decree 13/2023/ND-CP on Personal Data Protection"),
             (0.0, "Personal Data Protection Act 2012"),
         ],

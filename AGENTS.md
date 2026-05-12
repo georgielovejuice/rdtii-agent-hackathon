@@ -165,6 +165,41 @@ make test
 
 Files changed:
 
+- `pipeline/extract.py`
+- `pipeline/discover.py`
+- `pipeline/export.py`
+- `pipeline/reason.py`
+- `tests/test_pipeline.py`
+- `AGENTS.md`
+
+What changed:
+
+- Added PyMuPDF as the first PDF extraction path, including local
+  `file://` PDFs, returning `pymupdf` or `pymupdf_local` provenance.
+- Added the local Thailand PDPA PDF as the first Thailand seed source and made
+  explicit seed tiers respected so official local copies remain scoreable.
+- Added `rdtii:extractionMethod` to JSON-LD indicator output while preserving
+  the existing `extraction_method` field.
+- Added verified heuristic fallback recovery when Ollama returns UNCERTAIN or
+  an unverified quote but an exact local rule can be span-verified.
+- Made exact phrase matching tolerant of PDF whitespace while returning the
+  verbatim source substring.
+- Added regression coverage for local PDF extraction, local seed tiering,
+  JSON-LD provenance, heuristic recovery, and PDF whitespace matching.
+
+Verification:
+
+- `python -m pip install --user 'pymupdf>=1.24.0'` -> installed
+  `pymupdf-1.27.2.3` in the active Python environment.
+- `pytest tests/ -v` -> 23 passed, 1 ChromaDB deprecation warning.
+- `python main.py --country thailand --pillars 6 7` -> verified real local
+  PDF extraction via `pymupdf_local`, 110 parsed article chunks, 127 indexed
+  articles, and a live Ollama run with 6 confirmed scores and 3 review items.
+
+### 2026-05-13
+
+Files changed:
+
 - `pipeline/retrieval.py`
 - `main.py`
 - `tests/test_pipeline.py`

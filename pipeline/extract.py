@@ -4,10 +4,11 @@ Stage 2 — Extraction
 Converts raw documents (PDF, scanned PDF, HTML) into structured legal text.
 
 Priority:
-  1. Docling     — digital PDFs (best structure preservation)
-  2. Surya OCR   — scanned PDFs (multilingual)
-  3. Tesseract   — scanned PDFs fallback
-  4. Playwright + BeautifulSoup — HTML pages
+  1. PyMuPDF     — local/downloaded digital PDFs
+  2. Docling     — digital PDFs (best structure preservation)
+  3. Surya OCR   — scanned PDFs (multilingual)
+  4. Tesseract   — scanned PDFs fallback
+  5. Playwright + BeautifulSoup — HTML pages
 
 Output per document:
   {
@@ -72,7 +73,7 @@ def extract_document(source) -> dict:
 
 
 def _extract_pdf(url: str) -> tuple[str, str]:
-    """Try Docling first, fall back to Surya OCR, then Tesseract."""
+    """Try PyMuPDF first, then Docling, Surya OCR, and Tesseract."""
     fallback = _demo_fallback_text(url)
     try:
         tmp_path, should_cleanup = _resolve_pdf_input(url)
@@ -82,6 +83,16 @@ def _extract_pdf(url: str) -> tuple[str, str]:
             return fallback, "bundled_demo_text"
         logger.warning(f"[extract] Download failed for {url}: {e}")
         return "", "failed"
+
+    # Try PyMuPDF first. It is fast, handles file:// inputs, and is the
+    # lightweight digital-PDF path available in the demo environment.
+    try:
+        text = _extract_pdf_text_with_pymupdf(tmp_path)
+        if text and len(text.strip()) > 200:
+            _cleanup_temp_file(tmp_path, should_cleanup)
+            return text, "pymupdf" if should_cleanup else "pymupdf_local"
+    except Exception as e:
+        logger.warning(f"[extract] PyMuPDF failed: {e} — trying Docling")
 
     # Try Docling (best for digital PDFs)
     try:
@@ -132,6 +143,20 @@ def _extract_pdf(url: str) -> tuple[str, str]:
     if fallback:
         return fallback, "bundled_demo_text"
     return "", "failed"
+
+
+def _extract_pdf_text_with_pymupdf(path: str) -> str:
+    """Extract text from a digital PDF using PyMuPDF."""
+    try:
+        import fitz
+    except ModuleNotFoundError:
+        import pymupdf as fitz
+
+    document = fitz.open(path)
+    try:
+        return "\n".join(page.get_text() for page in document)
+    finally:
+        document.close()
 
 
 def _extract_html(url: str) -> tuple[str, str]:

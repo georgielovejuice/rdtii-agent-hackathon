@@ -67,6 +67,7 @@ def export_jsonld(
             "rdtii:sourceTitle": s.source_title,
             "rdtii:sourceTier": s.source_tier,
             "extraction_method": s.extraction_method,
+            "rdtii:extractionMethod": s.extraction_method if hasattr(s, "extraction_method") else "unknown",
             "article_ref": s.article_ref,
             "rdtii:effectiveDate": s.effective_date,
             "rdtii:sha256": s.sha256,

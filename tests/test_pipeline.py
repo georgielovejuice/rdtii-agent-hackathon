@@ -8,11 +8,11 @@ import pytest
 
 from main import run_pipeline
 from pipeline.authority import filter_scoreable, get_tier1_only, resolve_authority
-from pipeline.discover import DiscoveredSource
+from pipeline.discover import DiscoveredSource, get_seed_sources
 from pipeline.extract import extract_document
 import pipeline.retrieval as retrieval_module
 from pipeline.retrieval import HybridRetriever
-from pipeline.reason import _call_ollama, _heuristic_classify, load_rubric, score_indicator
+from pipeline.reason import _call_ollama, _exact_phrase, _heuristic_classify, load_rubric, score_indicator
 from pipeline.verify import verify_span
 
 
@@ -47,6 +47,74 @@ def test_no_quote_no_score(monkeypatch):
 
     assert result.human_review_required is True
     assert result.confidence == "UNCERTAIN"
+
+
+def test_verified_heuristic_recovers_from_unverified_llm_quote(monkeypatch):
+    indicator = load_rubric(7)["indicators"][0]
+    article = {
+        "id": "title",
+        "section": "Document title",
+        "text": "Personal Data Protection Act B.E. 2562 (2019)",
+    }
+    source_meta = {
+        "url": "file:///tmp/pdpa.pdf",
+        "title": "Personal Data Protection Act B.E. 2562 (2019)",
+        "tier": 1,
+        "extraction_method": "pymupdf_local",
+        "effective_date": "",
+        "sha256": "abc123",
+    }
+
+    monkeypatch.setattr(
+        "pipeline.reason._call_llm",
+        lambda _prompt: json.dumps({
+            "score": 1.0,
+            "confidence": "HIGH",
+            "verbatim_quote": "No dedicated data protection legislation exists.",
+            "article_ref": "Document title",
+            "rationale": "Hallucinated absence of a law.",
+        }),
+    )
+
+    result = score_indicator(indicator, article, source_meta)
+
+    assert result.human_review_required is False
+    assert result.score == 0.0
+    assert result.verbatim_quote == "Personal Data Protection Act B.E. 2562"
+
+
+def test_verified_heuristic_recovers_from_uncertain_llm(monkeypatch):
+    indicator = load_rubric(7)["indicators"][0]
+    article = {
+        "id": "s5",
+        "section": "Section 5",
+        "text": "Section 5 This Act applies to the collection, use, or disclosure of Personal Data by a Data Controller.",
+    }
+    source_meta = {
+        "url": "file:///tmp/pdpa.pdf",
+        "title": "Personal Data Protection Act B.E. 2562 (2019)",
+        "tier": 1,
+        "extraction_method": "pymupdf_local",
+        "effective_date": "",
+        "sha256": "abc123",
+    }
+
+    monkeypatch.setattr(
+        "pipeline.reason._call_llm",
+        lambda _prompt: json.dumps({
+            "score": None,
+            "confidence": "UNCERTAIN",
+            "verbatim_quote": "",
+            "article_ref": "Section 5",
+            "rationale": "No supporting phrase found.",
+        }),
+    )
+
+    result = score_indicator(indicator, article, source_meta)
+
+    assert result.human_review_required is False
+    assert result.score == 0.0
+    assert result.verbatim_quote == "This Act applies to the collection, use, or disclosure of Personal Data"
 
 
 def test_span_verifier_catches_hallucination():
@@ -115,6 +183,13 @@ def test_tier1_wins_conflict():
     assert get_tier1_only(resolved)[0].tier == 1
 
 
+def test_thailand_local_pdf_seed_is_tier1():
+    source = get_seed_sources("thailand", pillars=[6, 7])[0]
+
+    assert source.url.startswith("file://")
+    assert source.tier == 1
+
+
 def test_heuristic_classifier_no_quote_no_score():
     indicator = load_rubric(6)["indicators"][0]
 
@@ -137,6 +212,15 @@ def test_heuristic_finds_exact_phrase_thailand():
     assert result["verbatim_quote"] in text
 
 
+def test_exact_phrase_tolerates_pdf_whitespace():
+    text = "This Act applies to the collection, use, or disclosure of  Personal Data by a Data Controller."
+    phrase = "This Act applies to the collection, use, or disclosure of Personal Data"
+
+    quote = _exact_phrase(text, phrase)
+
+    assert quote == "This Act applies to the collection, use, or disclosure of  Personal Data"
+
+
 def test_local_file_url_extraction(tmp_path):
     law_path = tmp_path / "sample_law.html"
     law_path.write_text(
@@ -157,6 +241,75 @@ def test_local_file_url_extraction(tmp_path):
     assert doc["extraction_method"] == "local_file"
     assert doc["articles"]
     assert doc["sha256"]
+
+
+def test_local_pdf_url_extraction_uses_pymupdf(tmp_path):
+    pdf_path = tmp_path / "sample_law.pdf"
+    _write_minimal_pdf(
+        pdf_path,
+        [
+            "Sample Personal Data Protection Act",
+            "Section 14. The data controller shall collect personal data only where necessary "
+            "for a lawful purpose, shall notify the data subject before or at collection, "
+            "and shall preserve the rights provided under this Act.",
+            "Section 77. The Office may order administrative fines for violations of this Act, "
+            "including failures to perform duties imposed on a data controller, processor, "
+            "or other responsible person under the personal data protection framework.",
+        ],
+    )
+
+    source = DiscoveredSource(
+        url=pdf_path.resolve().as_uri(),
+        title="Sample Local PDF Law",
+        language="en",
+        doc_type="pdf",
+        tier=1,
+        pillar_hint=[7],
+    )
+
+    doc = extract_document(source)
+
+    assert doc["extraction_method"] == "pymupdf_local"
+    assert len(doc["articles"]) >= 2
+    assert {article["section"] for article in doc["articles"]} >= {"Section 14.", "Section 77."}
+    assert doc["sha256"]
+
+
+def _write_minimal_pdf(path: Path, lines: list[str]) -> None:
+    escaped_lines = [line.replace("\\", "\\\\").replace("(", "\\(").replace(")", "\\)") for line in lines]
+    text_commands = ["BT", "/F1 12 Tf", "72 720 Td"]
+    for idx, line in enumerate(escaped_lines):
+        if idx:
+            text_commands.append("0 -28 Td")
+        text_commands.append(f"({line}) Tj")
+    text_commands.append("ET")
+    stream = "\n".join(text_commands).encode("ascii")
+
+    objects = [
+        b"<< /Type /Catalog /Pages 2 0 R >>",
+        b"<< /Type /Pages /Kids [3 0 R] /Count 1 >>",
+        b"<< /Type /Page /Parent 2 0 R /MediaBox [0 0 612 792] /Resources << /Font << /F1 4 0 R >> >> /Contents 5 0 R >>",
+        b"<< /Type /Font /Subtype /Type1 /BaseFont /Helvetica >>",
+        b"<< /Length " + str(len(stream)).encode("ascii") + b" >>\nstream\n" + stream + b"\nendstream",
+    ]
+
+    pdf = bytearray(b"%PDF-1.4\n")
+    offsets = [0]
+    for number, body in enumerate(objects, start=1):
+        offsets.append(len(pdf))
+        pdf.extend(f"{number} 0 obj\n".encode("ascii"))
+        pdf.extend(body)
+        pdf.extend(b"\nendobj\n")
+
+    xref_offset = len(pdf)
+    pdf.extend(f"xref\n0 {len(objects) + 1}\n".encode("ascii"))
+    pdf.extend(b"0000000000 65535 f \n")
+    for offset in offsets[1:]:
+        pdf.extend(f"{offset:010d} 00000 n \n".encode("ascii"))
+    pdf.extend(
+        f"trailer\n<< /Size {len(objects) + 1} /Root 1 0 R >>\nstartxref\n{xref_offset}\n%%EOF\n".encode("ascii")
+    )
+    path.write_bytes(bytes(pdf))
 
 
 def test_llm_prefilter_skips_irrelevant_article(monkeypatch):
@@ -325,6 +478,7 @@ def test_jsonld_shape_and_audit_stages(monkeypatch, tmp_path):
         "rdtii:sourceTitle",
         "rdtii:sourceTier",
         "extraction_method",
+        "rdtii:extractionMethod",
         "article_ref",
         "rdtii:sha256",
         "human_review_required",

@@ -119,6 +119,14 @@ def infer_doc_type(url: str, content_type: str = "") -> Literal["pdf", "html", "
 SEED_SOURCES: dict[str, list[dict]] = {
     "thailand": [
         {
+            "url": "file:///home/engineerkim/Desktop/rdtii-agent/pdf/thailand/Personal%20Data%20Protection%20Act%202019.pdf",
+            "title": "Personal Data Protection Act B.E. 2562 (2019) — local copy",
+            "language": "en",
+            "doc_type": "pdf",
+            "tier": 1,
+            "pillar_hint": [6, 7],
+        },
+        {
             "url": "https://www.oag.go.th/wp-content/uploads/2021/11/Personal-Data-Protection-Act-BE-2562-2019.pdf",
             "title": "Personal Data Protection Act B.E. 2562 (2019)",
             "language": "en",
@@ -187,7 +195,7 @@ def get_seed_sources(country: str, pillars: list[int] | None = None) -> list[Dis
     for item in raw:
         if pillars and not any(p in item.get("pillar_hint", []) for p in pillars):
             continue
-        tier = classify_tier(item["url"], item["title"])
+        tier = item.get("tier", classify_tier(item["url"], item["title"]))
         sources.append(DiscoveredSource(
             url=item["url"],
             title=item["title"],
