@@ -12,13 +12,15 @@ including articles that are only reachable through cross-references.
 
 from __future__ import annotations
 import logging
+import os
 import re
 from dataclasses import dataclass, field
-from typing import Any
 
 logger = logging.getLogger(__name__)
 
 TOP_K = 10   # number of articles to retrieve per indicator query
+EMBEDDING_MODEL = "sentence-transformers/paraphrase-multilingual-MiniLM-L12-v2"
+_EMBEDDER_CACHE = None
 
 
 @dataclass
@@ -28,6 +30,29 @@ class RetrievedContext:
     articles: list[dict]            # top-K most relevant article chunks
     cross_refs: list[dict] = field(default_factory=list)   # linked via KG
     all_articles: list[dict] = field(default_factory=list) # articles + cross_refs
+
+
+@dataclass(frozen=True)
+class RetrievalHealth:
+    semantic_search: bool
+    knowledge_graph: bool
+    article_count: int
+    graph_edges: int = 0
+
+    @property
+    def mode(self) -> str:
+        if self.semantic_search and self.knowledge_graph:
+            return "semantic+graph"
+        if self.semantic_search:
+            return "semantic"
+        if self.knowledge_graph:
+            return "keyword+graph"
+        return "keyword"
+
+    def summary(self) -> str:
+        graph = f"{self.graph_edges} graph edges" if self.knowledge_graph else "graph disabled"
+        semantic = "semantic search active" if self.semantic_search else "keyword fallback active"
+        return f"{semantic}; {graph}; {self.article_count} articles"
 
 
 class HybridRetriever:
@@ -40,6 +65,8 @@ class HybridRetriever:
         self._collection = None
         self._graph      = None
         self._articles   = {}    # id → article dict
+        self._section_index = {}
+        self._embedder   = None
 
     def build(self, articles: list[dict], collection_name: str = "rdtii_docs"):
         """
@@ -49,10 +76,28 @@ class HybridRetriever:
             articles:        List of article dicts from extract.py
             collection_name: ChromaDB collection name (unique per run)
         """
-        self._articles = {a["id"]: a for a in articles}
-        self._build_vector_index(articles, collection_name)
-        self._build_knowledge_graph(articles)
+        self._articles = {}
+        self._section_index = {}
+        for idx, article in enumerate(articles):
+            retrieval_id = f"{article.get('id', 'article')}_{idx}"
+            indexed_article = {**article, "_retrieval_id": retrieval_id}
+            self._articles[retrieval_id] = indexed_article
+            self._section_index.setdefault(article.get("id", ""), []).append(retrieval_id)
+
+        indexed_articles = list(self._articles.values())
+        self._build_vector_index(indexed_articles, collection_name)
+        self._build_knowledge_graph(indexed_articles)
         logger.info(f"[retrieval] Indexed {len(articles)} articles")
+
+    def health(self) -> RetrievalHealth:
+        """Return active retrieval capabilities for logs, UI, and audits."""
+        graph_edges = self._graph.number_of_edges() if self._graph is not None else 0
+        return RetrievalHealth(
+            semantic_search=self._collection is not None,
+            knowledge_graph=self._graph is not None,
+            article_count=len(self._articles),
+            graph_edges=graph_edges,
+        )
 
     def query(self, indicator: dict) -> RetrievedContext:
         """
@@ -71,12 +116,12 @@ class HybridRetriever:
         # Step 3: Knowledge graph expansion — follow cross-references
         cross_refs = []
         for article in top_articles:
-            linked = self._follow_cross_refs(article["id"])
+            linked = self._follow_cross_refs(article["_retrieval_id"])
             cross_refs.extend(linked)
 
         # Deduplicate
-        seen = {a["id"] for a in top_articles}
-        unique_cross_refs = [a for a in cross_refs if a["id"] not in seen]
+        seen = {a["_retrieval_id"] for a in top_articles}
+        unique_cross_refs = [a for a in cross_refs if a["_retrieval_id"] not in seen]
 
         return RetrievedContext(
             indicator_id=indicator["id"],
@@ -91,15 +136,14 @@ class HybridRetriever:
     def _build_vector_index(self, articles: list[dict], collection_name: str):
         try:
             import chromadb
-            from sentence_transformers import SentenceTransformer
 
-            self._embedder   = SentenceTransformer("sentence-transformers/paraphrase-multilingual-MiniLM-L12-v2")
+            self._embedder   = _get_embedder()
             self._chroma     = chromadb.Client()
             self._collection = self._chroma.get_or_create_collection(collection_name)
 
             texts = [a.get("text", "")[:1000] for a in articles]   # cap at 1000 chars
-            ids   = [a["id"] for a in articles]
-            embeddings = self._embedder.encode(texts).tolist()
+            ids   = [a["_retrieval_id"] for a in articles]
+            embeddings = self._embedder.encode(texts, show_progress_bar=False).tolist()
 
             self._collection.add(
                 documents=texts,
@@ -117,7 +161,7 @@ class HybridRetriever:
             return self._keyword_fallback(query, top_k)
 
         try:
-            query_embedding = self._embedder.encode([query]).tolist()
+            query_embedding = self._embedder.encode([query], show_progress_bar=False).tolist()
             results = self._collection.query(
                 query_embeddings=query_embedding,
                 n_results=min(top_k, len(self._articles)),
@@ -146,7 +190,7 @@ class HybridRetriever:
             self._graph = nx.DiGraph()
 
             for article in articles:
-                self._graph.add_node(article["id"], **article)
+                self._graph.add_node(article["_retrieval_id"], **article)
 
             # Find cross-references: "Section X", "Article X", "มาตรา X", etc.
             ref_pattern = re.compile(
@@ -158,8 +202,13 @@ class HybridRetriever:
                 matches = ref_pattern.findall(text)
                 for match in matches:
                     target_id = f"section{match.lower().replace('.', '')}"
-                    if target_id in self._articles and target_id != article["id"]:
-                        self._graph.add_edge(article["id"], target_id, rel="cross_ref")
+                    for target_retrieval_id in self._section_index.get(target_id, []):
+                        if target_retrieval_id != article["_retrieval_id"]:
+                            self._graph.add_edge(
+                                article["_retrieval_id"],
+                                target_retrieval_id,
+                                rel="cross_ref",
+                            )
 
             logger.info(
                 f"[retrieval] Knowledge graph: {self._graph.number_of_nodes()} nodes, "
@@ -195,3 +244,20 @@ def _keyword_boost(articles: list[dict], keywords: list[str]) -> list[dict]:
         return sum(1 for kw in kw_lower if kw in text)
 
     return sorted(articles, key=score, reverse=True)
+
+
+def _get_embedder():
+    """Load the multilingual embedding model once per process."""
+    global _EMBEDDER_CACHE
+    if _EMBEDDER_CACHE is None:
+        from sentence_transformers import SentenceTransformer
+        _EMBEDDER_CACHE = SentenceTransformer(
+            EMBEDDING_MODEL,
+            local_files_only=not _allow_embedding_download(),
+        )
+    return _EMBEDDER_CACHE
+
+
+def _allow_embedding_download() -> bool:
+    """Allow online model downloads only when explicitly requested."""
+    return os.getenv("RDTII_ALLOW_EMBEDDING_DOWNLOAD", "").lower() in {"1", "true", "yes"}

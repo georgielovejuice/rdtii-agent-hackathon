@@ -10,6 +10,8 @@ from main import run_pipeline
 from pipeline.authority import filter_scoreable, get_tier1_only, resolve_authority
 from pipeline.discover import DiscoveredSource
 from pipeline.extract import extract_document
+import pipeline.retrieval as retrieval_module
+from pipeline.retrieval import HybridRetriever
 from pipeline.reason import _call_ollama, _heuristic_classify, load_rubric, score_indicator
 from pipeline.verify import verify_span
 
@@ -182,6 +184,87 @@ def test_llm_prefilter_skips_irrelevant_article(monkeypatch):
 
     assert result.confidence == "UNCERTAIN"
     assert result.human_review_required is True
+
+
+def test_retrieval_health_reports_keyword_fallback(monkeypatch):
+    def fail_vector_index(self, _articles, _collection_name):
+        self._collection = None
+
+    def fail_graph(self, _articles):
+        self._graph = None
+
+    monkeypatch.setattr(HybridRetriever, "_build_vector_index", fail_vector_index)
+    monkeypatch.setattr(HybridRetriever, "_build_knowledge_graph", fail_graph)
+
+    retriever = HybridRetriever()
+    retriever.build([
+        {"id": "section1", "section": "Section 1", "text": "Personal data protection."},
+    ])
+
+    health = retriever.health()
+
+    assert health.mode == "keyword"
+    assert health.semantic_search is False
+    assert health.knowledge_graph is False
+    assert "keyword fallback active" in health.summary()
+
+
+def test_retriever_preserves_duplicate_section_ids(monkeypatch):
+    def skip_vector_index(self, _articles, _collection_name):
+        self._collection = None
+
+    def skip_graph(self, _articles):
+        self._graph = None
+
+    monkeypatch.setattr(HybridRetriever, "_build_vector_index", skip_vector_index)
+    monkeypatch.setattr(HybridRetriever, "_build_knowledge_graph", skip_graph)
+
+    retriever = HybridRetriever()
+    retriever.build([
+        {"id": "section28", "section": "Section 28", "text": "transfer personal data"},
+        {"id": "section28", "section": "Section 28", "text": "adequate protection standard"},
+    ])
+
+    ctx = retriever.query({
+        "id": "6.4",
+        "name": "Conditional flow regimes",
+        "description": "transfer personal data",
+        "keywords": ["transfer", "adequate"],
+    })
+
+    assert retriever.health().article_count == 2
+    assert len(ctx.articles) == 2
+    assert {article["id"] for article in ctx.articles} == {"section28"}
+    assert len({article["_retrieval_id"] for article in ctx.articles}) == 2
+
+
+def test_embedding_model_is_cached(monkeypatch):
+    calls = []
+
+    class FakeSentenceTransformer:
+        def __init__(self, model_name, local_files_only=True):
+            calls.append((model_name, local_files_only))
+
+    monkeypatch.setattr(retrieval_module, "_EMBEDDER_CACHE", None)
+    monkeypatch.setitem(
+        __import__("sys").modules,
+        "sentence_transformers",
+        type("FakeModule", (), {"SentenceTransformer": FakeSentenceTransformer}),
+    )
+
+    first = retrieval_module._get_embedder()
+    second = retrieval_module._get_embedder()
+
+    assert first is second
+    assert calls == [(retrieval_module.EMBEDDING_MODEL, True)]
+
+
+def test_embedding_download_requires_explicit_env(monkeypatch):
+    monkeypatch.delenv("RDTII_ALLOW_EMBEDDING_DOWNLOAD", raising=False)
+    assert retrieval_module._allow_embedding_download() is False
+
+    monkeypatch.setenv("RDTII_ALLOW_EMBEDDING_DOWNLOAD", "true")
+    assert retrieval_module._allow_embedding_download() is True
 
 
 def test_end_to_end_thailand_offline(monkeypatch):

@@ -1,6 +1,6 @@
 # AGENTS.md - RDTII Agent Working Notes
 
-Last updated: 2026-05-12
+Last updated: 2026-05-13
 
 This file is the persistent operating guide for coding agents working in this
 repository. Every agent that edits this project must update this file in the
@@ -160,6 +160,39 @@ make test
 ```
 
 ## Change Log
+
+### 2026-05-13
+
+Files changed:
+
+- `pipeline/retrieval.py`
+- `main.py`
+- `tests/test_pipeline.py`
+- `WORKFLOW.md`
+- `AGENTS.md`
+
+What changed:
+
+- Added retrieval health reporting so CLI/audit output shows whether retrieval
+  is running in semantic, graph, or fallback mode.
+- Cached the SentenceTransformer embedding model per process and made online
+  model downloads opt-in with `RDTII_ALLOW_EMBEDDING_DOWNLOAD=true`.
+- Fixed duplicate article IDs in retrieval by assigning unique internal
+  retrieval IDs while preserving legal section IDs for citations.
+- Suppressed embedding progress bars in normal pipeline output.
+- Added tests for retrieval health, duplicate section IDs, embedding cache, and
+  explicit embedding-download policy.
+- Documented the embedding cache/download workflow.
+
+Verification:
+
+- `pytest tests/ -v` -> 18 passed.
+- `python -m pip install --user 'chromadb>=0.5.0' 'sentence-transformers>=3.0.0' 'networkx>=3.3.0'`
+  -> installed retrieval dependencies.
+- `python -c "import chromadb, sentence_transformers, networkx"` -> imports
+  succeeded; `langchain` remains uninstalled.
+- `OLLAMA_BASE_URL=http://localhost:19999 OLLAMA_MODEL=llama3.1:8b python main.py --country thailand --pillars 6 7`
+  -> completed with heuristic fallback and retrieval mode `semantic+graph`.
 
 ### 2026-05-12
 

@@ -34,6 +34,16 @@ export OLLAMA_MODEL=llama3.1:8b
 If Ollama is not reachable, the pipeline still runs through the local heuristic
 fallback. The fallback must keep enforcing "No Quote -> No Score".
 
+ChromaDB semantic retrieval uses the local
+`sentence-transformers/paraphrase-multilingual-MiniLM-L12-v2` embedding model.
+The pipeline loads this model from the local cache by default so restricted demo
+environments do not pause on Hugging Face retries. To download or refresh the
+model intentionally, run once with:
+
+```bash
+RDTII_ALLOW_EMBEDDING_DOWNLOAD=true python -c "from pipeline.retrieval import _get_embedder; _get_embedder()"
+```
+
 ## 2. Collect Official Source Documents
 
 Start with official Tier 1 or Tier 2 sources. For the current demo, prioritize:
@@ -161,6 +171,8 @@ Keep the codebase reliable and pipeline-oriented:
 - Keep source metadata attached as it moves through the pipeline.
 - Prefer deterministic behavior for scoring and verification.
 - Keep Ollama calls behind relevance filtering and timeouts.
+- Keep embedding model downloads explicit with
+  `RDTII_ALLOW_EMBEDDING_DOWNLOAD=true`.
 - Keep heuristic fallback functional for offline demos.
 - Do not add OpenAI, Anthropic, or other paid cloud LLM providers.
 - Do not accept scores from Tier 3 sources.

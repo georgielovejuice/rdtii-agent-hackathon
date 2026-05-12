@@ -116,7 +116,15 @@ def run_pipeline(country: str, pillars: list[int], verbose: bool = False):
         return
     retriever    = HybridRetriever()
     retriever.build(all_articles, collection_name=f"rdtii_{run_id}")
-    log_to_audit(run_id, country, "retrieval", "index_built", f"{len(all_articles)} articles indexed")
+    retrieval_health = retriever.health()
+    log_to_audit(
+        run_id,
+        country,
+        "retrieval",
+        f"index_built:{retrieval_health.mode}",
+        retrieval_health.summary(),
+    )
+    console.log(f"  → Retrieval mode: {retrieval_health.mode} ({retrieval_health.summary()})")
 
     # ── Stage 5: Score each indicator ────────────────────────────────────────
     console.log("[5/6] Scoring RDTII indicators...")
